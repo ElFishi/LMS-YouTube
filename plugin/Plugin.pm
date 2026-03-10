@@ -126,6 +126,20 @@ sub initPlugin {
 #        |  |  |  |Function to call
 	Slim::Control::Request::addDispatch(['youtube', 'info'],
 		[1, 1, 1, \&cliInfoQuery]);
+# --- New CLI / JSON-RPC commands ---
+
+Slim::Control::Request::addDispatch(['youtube', 'playid', '_id'],
+    [1, 0, 0, \&cliPlayId]);
+
+Slim::Control::Request::addDispatch(['youtube', 'addid', '_id'],
+    [1, 0, 0, \&cliAddId]);
+
+Slim::Control::Request::addDispatch(['youtube', 'playlist', '_id'],
+    [1, 0, 0, \&cliPlaylist]);
+
+Slim::Control::Request::addDispatch(['youtube', 'addlist', '_id'],
+    [1, 0, 0, \&cliAddList]);
+
 }
 
 sub shutdownPlugin {
@@ -754,6 +768,82 @@ sub cliInfoQuery {
 	$request->addResult('offset', 0);
 
 	$request->setStatusDone();
+}
+
+# ----------------------------------------------------------------------
+# CLI helpers for direct playback via ID
+# ----------------------------------------------------------------------
+
+sub cliPlayId {
+    my $request = shift;
+
+    my $client = $request->client;
+    my $id     = $request->getParam('_id');
+
+    unless ($client && $id) {
+        $request->setStatusBadParams();
+        return;
+    }
+
+    my $url = STREAM_BASE_URL . $id;
+
+	Slim::Control::Request::executeRequest($client, ['playlist', 'play', $url]);
+
+    $request->setStatusDone();
+}
+
+sub cliAddId {
+    my $request = shift;
+
+    my $client = $request->client;
+    my $id     = $request->getParam('_id');
+
+    unless ($client && $id) {
+        $request->setStatusBadParams();
+        return;
+    }
+
+    my $url = STREAM_BASE_URL . $id;
+
+	Slim::Control::Request::executeRequest($client, ['playlist', 'add', $url]);
+
+    $request->setStatusDone();
+}
+
+sub cliPlaylist {
+    my $request = shift;
+
+    my $client = $request->client;
+    my $id     = $request->getParam('_id');
+
+    unless ($client && $id) {
+        $request->setStatusBadParams();
+        return;
+    }
+
+    my $url = 'ytplaylist://playlistId=' . $id;
+
+    Slim::Control::Request::executeRequest($client, ['playlist', 'play', $url]);
+
+    $request->setStatusDone();
+}
+
+sub cliAddList {
+    my $request = shift;
+
+    my $client = $request->client;
+    my $id     = $request->getParam('_id');
+
+    unless ($client && $id) {
+        $request->setStatusBadParams();
+        return;
+    }
+
+    my $url = 'ytplaylist://playlistId=' . $id;
+
+    Slim::Control::Request::executeRequest($client, ['playlist', 'add', $url]);
+
+    $request->setStatusDone();
 }
 
 1;
