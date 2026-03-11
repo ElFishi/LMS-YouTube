@@ -258,6 +258,59 @@
 		<input type="text" class="stdedit" name="pref_cache_ttl" id="pref_cache_ttl" value="[% prefs.pref_cache_ttl %]" size="5">
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_DOWNLOAD_SETTINGS" desc="PLUGIN_YOUTUBE_DOWNLOAD_SETTINGS_DESC" %]
+		<table style="border-collapse:collapse">
+			<tr>
+				<td style="padding:2px 8px 2px 0; white-space:nowrap">
+					<label for="pref_download_media_folder">[% "PLUGIN_YOUTUBE_DOWNLOAD_MEDIAFOLDER" | string %]:</label>
+				</td>
+				<td>
+					<input type="text" class="stdedit" name="pref_download_media_folder"
+						id="pref_download_media_folder"
+						value="[% prefs.pref_download_media_folder %]"
+						size="60"
+						placeholder="[% 'PLUGIN_YOUTUBE_DOWNLOAD_MEDIAFOLDER_PLACEHOLDER' | string %]">
+				</td>
+			</tr>
+			<tr><td colspan="2" style="padding:6px 0 2px 0"><hr style="margin:0"></td></tr>
+			<tr>
+				<td style="padding:2px 8px 2px 0; white-space:nowrap">
+					<label for="pref_download_output_playlist">[% "PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_PLAYLIST" | string %]:</label>
+				</td>
+				<td>
+					<input type="text" class="stdedit" name="pref_download_output_playlist"
+						id="pref_download_output_playlist"
+						value="[% prefs.pref_download_output_playlist %]"
+						size="60"
+						placeholder="[% 'PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_PLAYLIST_PLACEHOLDER' | string %]">
+				</td>
+			</tr>
+			<tr>
+				<td colspan="2">
+					<span class="muted">[% "PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_PLAYLIST_HINT" | string %]</span>
+				</td>
+			</tr>
+			<tr><td colspan="2" style="padding:6px 0 2px 0"><hr style="margin:0"></td></tr>
+			<tr>
+				<td style="padding:2px 8px 2px 0; white-space:nowrap">
+					<label for="pref_download_output_video">[% "PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_VIDEO" | string %]:</label>
+				</td>
+				<td>
+					<input type="text" class="stdedit" name="pref_download_output_video"
+						id="pref_download_output_video"
+						value="[% prefs.pref_download_output_video %]"
+						size="60"
+						placeholder="[% 'PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_VIDEO_PLACEHOLDER' | string %]">
+				</td>
+			</tr>
+			<tr>
+				<td colspan="2">
+					<span class="muted">[% "PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_VIDEO_HINT" | string %]</span>
+				</td>
+			</tr>
+		</table>
+	[% END %]
+
 	</div>
 
 	<hr>

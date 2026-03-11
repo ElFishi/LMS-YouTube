@@ -23,6 +23,7 @@ use Plugins::YouTube::API;
 use Plugins::YouTube::ProtocolHandler;
 use Plugins::YouTube::ListProtocolHandler;
 use Plugins::YouTube::Oauth2;
+use Plugins::YouTube::Download;
 
 use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
@@ -63,6 +64,9 @@ $prefs->init({
 	yt_dlp => '',
 	auto_update_ytdlp => 0,
 	auto_update_check_hour => 3,
+	download_output_playlist => '',
+	download_output_video => '',
+	download_media_folder => '',
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -126,6 +130,9 @@ sub initPlugin {
 #        |  |  |  |Function to call
 	Slim::Control::Request::addDispatch(['youtube', 'info'],
 		[1, 1, 1, \&cliInfoQuery]);
+
+	# Register the download command (no client required)
+	Plugins::YouTube::Download::registerCLI();
 }
 
 sub shutdownPlugin {
@@ -566,38 +573,95 @@ sub _renderList {
 			$item->{play}      	= STREAM_BASE_URL . $id;
 			$item->{playall}	= 1;
 			$item->{duration}	= 'N/A';
+
+			my @videoItems;
+
 			if (my $lastpos = $cache->get("yt:lastpos-$id")) {
 				my $position = Slim::Utils::DateTime::timeFormat($lastpos);
 				$position =~ s/^0+[:\.]//;
-				$item->{type} = "link";
-				$item->{items} = [ {
-						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
-						enclosure => {
-							type   => 'audio',
-							url    => STREAM_BASE_URL . $id,
-						},
-						#duration => 'N/A',
-					}, {
-						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
-						enclosure => {
-							type   => 'audio',
-							url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
-						}
-						#duration => 'N/A',
-				} ];
+				push @videoItems, {
+					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+					enclosure => {
+						type   => 'audio',
+						url    => STREAM_BASE_URL . $id,
+					},
+				}, {
+					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
+					enclosure => {
+						type   => 'audio',
+						url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
+					},
+				};
+			}
+
+			# Download option for individual videos
+			push @videoItems, {
+				name => cstring(undef, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+				type => 'link',
+				url  => sub {
+					my ($client, $cb, $args, $pt) = @_;
+					my $r = Plugins::YouTube::Download::startDownload('video', $id);
+					$cb->({ items => [{ type => 'text', name => $r->{message} }] });
+				},
+			};
+
+			if (@videoItems) {
+				$item->{type}  = 'link';
+				$item->{items} = \@videoItems;
 			}
 		} elsif ($kind eq 'youtube#playlist') {
-			$item->{name} = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
-			$item->{passthrough} = [ { playlistId => $id, %$passthrough } ];
-			$item->{url}         = \&playlistHandler;
-			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
-			$item->{favorites_type}	= 'playlist';
+			my $favUrl = 'ytplaylist://playlistId=' . $id;
+			$item->{name}           = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
+			$item->{favorites_url}  = $favUrl;
+			$item->{favorites_type} = 'playlist';
+			$item->{url}            = sub {
+				my ($client, $cb, $args, $pt) = @_;
+				# Build a sub-menu: Browse + Download
+				$cb->({ items => [
+					{
+						name        => cstring($client, 'PLUGIN_YOUTUBE_BROWSE_PLAYLIST'),
+						type        => 'playlist',
+						url         => \&playlistHandler,
+						passthrough => [ { playlistId => $id, %$passthrough } ],
+					},
+					{
+						name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+						type => 'link',
+						url  => sub {
+							my ($client2, $cb2, $args2, $pt2) = @_;
+							my $r = Plugins::YouTube::Download::startDownload('playlist', "playlistId=$id");
+							$cb2->({ items => [{ type => 'text', name => $r->{message} }] });
+						},
+					},
+				] });
+			};
+			$item->{passthrough} = [ {} ];
 		} elsif ($kind eq 'youtube#channel') {
-			$item->{name} = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
-			$item->{passthrough} = [ { channelId => $id, %$passthrough } ];
-			$item->{url}         = \&channelHandler;
-			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
-			$item->{favorites_type}	= 'playlist';
+			my $favUrl = 'ytplaylist://channelId=' . $id;
+			$item->{name}           = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
+			$item->{favorites_url}  = $favUrl;
+			$item->{favorites_type} = 'playlist';
+			$item->{url}            = sub {
+				my ($client, $cb, $args, $pt) = @_;
+				$cb->({ items => [
+					{
+						name        => cstring($client, 'PLUGIN_YOUTUBE_BROWSE_CHANNEL'),
+						type        => 'playlist',
+						url         => \&channelHandler,
+						passthrough => [ { channelId => $id, %$passthrough } ],
+					},
+					{
+						name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+						type => 'link',
+						url  => sub {
+							my ($client2, $cb2, $args2, $pt2) = @_;
+							my $r = Plugins::YouTube::Download::startDownload('playlist', "channelId=$id");
+							$cb2->({ items => [{ type => 'text', name => $r->{message} }] });
+						},
+					},
+				] });
+			};
+			$item->{passthrough} = [ {} ];
 		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
