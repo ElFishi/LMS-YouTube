@@ -42,7 +42,18 @@ sub registerCLI {
 	$log->info('YouTube download CLI command registered');
 }
 
-# CLI handler:  youtube download url:<url>
+# CLI handler:
+#   Positional:  ["youtube","download","<url>"]
+#   Tagged:      youtube download url:<url>
+#
+# Accepted URL forms:
+#   youtube://www.youtube.com/v/<id>   (internal stream URL)
+#   ytplaylist://playlistId=PL...      (internal playlist URL)
+#   ytplaylist://channelId=UC...       (internal channel URL)
+#   https://www.youtube.com/watch?v=<id>
+#   https://www.youtube.com/playlist?list=PL...
+#   https://music.youtube.com/playlist?list=PL...
+#   https://www.youtube.com/channel/<id>
 sub cliDownload {
 	my $request = shift;
 
@@ -51,7 +62,8 @@ sub cliDownload {
 		return;
 	}
 
-	my $url = $request->getParam('_url') // $request->getParam('url');
+	# Accept both positional (_p2) and tagged (url:) forms.
+	my $url = $request->getParam('_p2') // $request->getParam('url');
 
 	unless ($url) {
 		$log->warn('youtube download: no URL supplied');
@@ -125,10 +137,17 @@ sub startDownload {
 sub _launchUnix {
 	my ($logFile, @cmd) = @_;
 
-	# Must be set BEFORE fork() to close the race where the child exits
-	# between fork() returning and the parent reaching this line, which
-	# would leave a zombie. 'local' unwinds it when the sub returns.
-	local $SIG{CHLD} = 'IGNORE';
+	# We do NOT set SIG{CHLD} in the parent — not even temporarily.
+	#
+	# Setting SIG{CHLD} = 'IGNORE' (even scoped with 'local') clobbers
+	# AnyEvent's internal SIGCHLD watcher. LMS uses that watcher to detect
+	# when the yt-dlp child started by ProtocolHandler::getNextTrack (via
+	# AnyEvent::Util::run_cmd) has finished. Stomping it causes the callback
+	# to never fire, leaving the playing playlist stuck between tracks.
+	#
+	# Zombies are not a concern: setsid() below makes the child a new session
+	# leader. When it exits without a waiting parent, init (PID 1) reaps it —
+	# that is standard POSIX behaviour for orphaned processes.
 
 	my $pid = fork();
 
@@ -141,20 +160,18 @@ sub _launchUnix {
 		# ── child ──
 		# $logFile was resolved in the parent before fork() so we do not
 		# call any LMS Perl code (OSDetect, prefs, etc.) from the child.
-		# That avoids any tied-handle or module-state issues post-fork.
 
 		# LMS ties STDIN/STDOUT/STDERR to Slim::Utils::Log::Trapper objects.
 		# Perl's open() on a tied glob calls OPEN() on the tied object, which
-		# Trapper does not implement. Bypass the tied-handle layer entirely
-		# by working at the POSIX file-descriptor level.
+		# Trapper does not implement. Use POSIX fd operations to bypass the
+		# tied-handle layer entirely.
 
 		# fd 0 → /dev/null
 		my $null_fd = POSIX::open('/dev/null', O_RDONLY);
 		POSIX::dup2($null_fd, 0) if defined $null_fd && $null_fd >= 0;
 		POSIX::close($null_fd)   if defined $null_fd && $null_fd > 2;
 
-		# fd 1 + 2 → yt-dlp log file (append)
-		# Try the resolved path first, then /tmp, then /dev/null.
+		# fd 1 + 2 → log file, fallback chain to /tmp, /dev/null
 		my $log_fd = POSIX::open($logFile, O_WRONLY | O_CREAT | O_APPEND, 0644);
 		if (!defined $log_fd || $log_fd < 0) {
 			$log_fd = POSIX::open('/tmp/yt-dlp-download.log',
@@ -164,33 +181,28 @@ sub _launchUnix {
 			$log_fd = POSIX::open('/dev/null', O_WRONLY);
 		}
 		if (defined $log_fd && $log_fd >= 0) {
-			# Write a timestamp header before handing the fd to yt-dlp.
-			# We use the raw fd via syswrite so we stay below Perl's tied
-			# stdio layer. strftime is imported from POSIX at the top.
 			my $ts = POSIX::strftime(
 				"\n=== %Y-%m-%d %H:%M:%S " . join(' ', @cmd) . " ===\n",
 				localtime);
 			POSIX::write($log_fd, $ts, length($ts));
-
 			POSIX::dup2($log_fd, 1);
 			POSIX::dup2($log_fd, 2);
 			POSIX::close($log_fd) if $log_fd > 2;
 		}
 
-		# Reset SIGCHLD to default before exec so that yt-dlp (a frozen
-		# PyInstaller binary) can waitpid() on its own ffmpeg children.
-		# We set IGNORE in the parent before fork() to prevent zombies, but
-		# that disposition is inherited across exec and breaks yt-dlp's
-		# internal child-process handling (visible as PYI LOADER warnings).
-		$SIG{CHLD} = 'DEFAULT';
+		# Reset all signals to DEFAULT so yt-dlp (a PyInstaller binary) gets
+		# a clean signal table and can waitpid() on its ffmpeg children.
+		for my $sig (keys %SIG) {
+			$SIG{$sig} = 'DEFAULT' if defined $SIG{$sig} && !ref $SIG{$sig};
+		}
 
-		# Detach from LMS signal group.
+		# Become a new session leader, detached from LMS's process group.
 		POSIX::setsid();
 
 		exec @cmd or POSIX::_exit(1);
 	}
 
-	# ── parent ──
+	# ── parent ── init reaps the orphan; nothing else needed here
 	return { pid => $pid };
 }
 
@@ -243,20 +255,54 @@ sub _launchWindows {
 
 # ─── Private helpers ────────────────────────────────────────────────────────
 
-# Parse a youtube:// or ytplaylist:// URL into ($type, $id).
-# Mirrors the regex logic from ProtocolHandler::getId().
+# Parse any supported URL form into ($type, $id).
+#
+# Internal LMS forms:
+#   youtube://www.youtube.com/v/<id>       individual video
+#   ytplaylist://playlistId=PL...          playlist
+#   ytplaylist://channelId=UC...           channel
+#
+# Raw https:// forms (accepted from CLI/JSON-RPC):
+#   https://*.youtube.com/watch?v=<id>
+#   https://youtu.be/<id>
+#   https://*.youtube.com/playlist?list=PL...
+#   https://music.youtube.com/playlist?list=PL...
+#   https://*.youtube.com/channel/<id>
+#   https://*.youtube.com/c/<name>  (treated as channel)
 sub _parseUrl {
 	my ($url) = @_;
 
-	# Individual video: youtube://www.youtube.com/v/<id>  or  youtube://<id>
-	if ($url =~ m{^youtube://(?:(?:www|m)\.youtube\.com/v/)?([A-Za-z0-9_-]{11})}i ||
-	    $url =~ m{^youtube://([A-Za-z0-9_-]{11})}i) {
+	# ── Internal LMS stream URL ──
+	if ($url =~ m{^youtube://}i) {
+		# youtube://www.youtube.com/v/<id>  or  youtube://<id>
+		if ($url =~ m{^youtube://(?:(?:www|m)\.youtube\.com/v/)?([A-Za-z0-9_-]{11})(?:[^A-Za-z0-9_-]|$)}i) {
+			return ('video', $1);
+		}
+	}
+
+	# ── Internal LMS playlist/channel URL ──
+	if ($url =~ m{^ytplaylist://(.+)}i) {
+		return ('playlist', $1);
+	}
+
+	# ── Raw https:// video URL ──
+	if ($url =~ m{^https?://(?:(?:www|m|music)\.youtube\.com/watch\?.*v=|youtu\.be/)([A-Za-z0-9_-]{11})}i) {
 		return ('video', $1);
 	}
 
-	# Playlist or channel: ytplaylist://playlistId=PL... | ytplaylist://channelId=UC...
-	if ($url =~ m{^ytplaylist://(.+)}i) {
-		return ('playlist', $1);   # keep the raw key=value string
+	# ── Raw https:// playlist URL ──
+	if ($url =~ m{^https?://(?:(?:www|m|music)\.youtube\.com)/playlist\?.*list=([A-Za-z0-9_-]+)}i) {
+		return ('playlist', "playlistId=$1");
+	}
+
+	# ── Raw https:// channel URL ──
+	if ($url =~ m{^https?://(?:(?:www|m)\.youtube\.com)/channel/([A-Za-z0-9_-]+)}i) {
+		return ('playlist', "channelId=$1");
+	}
+
+	# ── Raw https:// channel vanity/custom URL — pass directly to yt-dlp ──
+	if ($url =~ m{^https?://(?:(?:www|m)\.youtube\.com)/(?:c|user)/([A-Za-z0-9_-]+)}i) {
+		return ('playlist', "channelId=$1");
 	}
 
 	return (undef, undef);

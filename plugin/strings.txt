@@ -819,3 +819,21 @@ PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_VIDEO_HINT
 	DA	Standard: &lt;mediemappe&gt;/YouTube/Singles/%(uploader)s - %(title)s.%(ext)s
 	DE	Standard: &lt;Medienordner&gt;/YouTube/Singles/%(uploader)s - %(title)s.%(ext)s
 	EN	Default: &lt;media folder&gt;/YouTube/Singles/%(uploader)s - %(title)s.%(ext)s
+
+PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_OK
+	CS	Složka existuje a je zapisovatelná.
+	DA	Mappen findes og er skrivbar.
+	DE	Ordner gefunden und beschreibbar.
+	EN	Folder found and writable.
+
+PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_NOT_FOUND
+	CS	Složka neexistuje nebo není přístupná.
+	DA	Mappen findes ikke eller er utilgængelig.
+	DE	Ordner nicht gefunden oder nicht erreichbar.
+	EN	Folder does not exist or is not accessible.
+
+PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_NOT_WRITABLE
+	CS	Složka existuje, ale LMS do ní nemůže zapisovat.
+	DA	Mappen findes, men LMS kan ikke skrive til den.
+	DE	Ordner gefunden, aber LMS hat keine Schreibrechte.
+	EN	Folder exists but LMS does not have write permission.

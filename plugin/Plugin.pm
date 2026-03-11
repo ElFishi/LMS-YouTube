@@ -98,6 +98,11 @@ sub initPlugin {
 		func  => \&webVideoLink,
 	) );
 
+	Slim::Menu::TrackInfo->registerInfoProvider( youtubedownload => (
+		after => 'bottom',
+		func  => \&downloadInfoMenu,
+	) );
+
 	Slim::Menu::AlbumInfo->registerInfoProvider( youtube => (
 		after => 'middle',
 		func  => \&albumInfoMenu,
@@ -610,58 +615,50 @@ sub _renderList {
 				$item->{items} = \@videoItems;
 			}
 		} elsif ($kind eq 'youtube#playlist') {
-			my $favUrl = 'ytplaylist://playlistId=' . $id;
 			$item->{name}           = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
-			$item->{favorites_url}  = $favUrl;
+			$item->{favorites_url}  = 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type} = 'playlist';
+			# Wrap playlistHandler to prepend a Download item to the song list.
+			# This keeps all original play/queue/browse behaviour intact while
+			# adding Download as the first entry when the user opens the playlist.
+			$item->{passthrough}    = [ {} ];
 			$item->{url}            = sub {
 				my ($client, $cb, $args, $pt) = @_;
-				# Build a sub-menu: Browse + Download
-				$cb->({ items => [
-					{
-						name        => cstring($client, 'PLUGIN_YOUTUBE_BROWSE_PLAYLIST'),
-						type        => 'playlist',
-						url         => \&playlistHandler,
-						passthrough => [ { playlistId => $id, %$passthrough } ],
-					},
-					{
+				playlistHandler($client, sub {
+					my $result = shift;
+					unshift @{ $result->{items} }, {
 						name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
 						type => 'link',
 						url  => sub {
-							my ($client2, $cb2, $args2, $pt2) = @_;
+							my ($c2, $cb2) = @_;
 							my $r = Plugins::YouTube::Download::startDownload('playlist', "playlistId=$id");
 							$cb2->({ items => [{ type => 'text', name => $r->{message} }] });
 						},
-					},
-				] });
+					};
+					$cb->($result);
+				}, $args, { playlistId => $id, %$passthrough });
 			};
-			$item->{passthrough} = [ {} ];
 		} elsif ($kind eq 'youtube#channel') {
-			my $favUrl = 'ytplaylist://channelId=' . $id;
 			$item->{name}           = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
-			$item->{favorites_url}  = $favUrl;
+			$item->{favorites_url}  = 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type} = 'playlist';
+			$item->{passthrough}    = [ {} ];
 			$item->{url}            = sub {
 				my ($client, $cb, $args, $pt) = @_;
-				$cb->({ items => [
-					{
-						name        => cstring($client, 'PLUGIN_YOUTUBE_BROWSE_CHANNEL'),
-						type        => 'playlist',
-						url         => \&channelHandler,
-						passthrough => [ { channelId => $id, %$passthrough } ],
-					},
-					{
+				channelHandler($client, sub {
+					my $result = shift;
+					unshift @{ $result->{items} }, {
 						name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
 						type => 'link',
 						url  => sub {
-							my ($client2, $cb2, $args2, $pt2) = @_;
+							my ($c2, $cb2) = @_;
 							my $r = Plugins::YouTube::Download::startDownload('playlist', "channelId=$id");
 							$cb2->({ items => [{ type => 'text', name => $r->{message} }] });
 						},
-					},
-				] });
+					};
+					$cb->($result);
+				}, $args, { channelId => $id, %$passthrough });
 			};
-			$item->{passthrough} = [ {} ];
 		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
@@ -800,6 +797,25 @@ sub searchInfoMenu {
 		   ],
 	};
 }
+
+# Appears in the ... context menu for any currently-playing or browsed
+# youtube:// track.  Returns a Download item when the URL is a video.
+sub downloadInfoMenu {
+	my ($client, $url, $obj, $remoteMeta) = @_;
+
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url) or return;
+
+	return {
+		type => 'link',
+		name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+		url  => sub {
+			my ($c, $cb) = @_;
+			my $r = Plugins::YouTube::Download::startDownload('video', $id);
+			$cb->({ items => [{ type => 'text', name => $r->{message} }] });
+		},
+	};
+}
+
 
 # special query to allow weblink to be sent to iPeng
 sub cliInfoQuery {

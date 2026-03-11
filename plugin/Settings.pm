@@ -3,6 +3,7 @@ use base qw(Slim::Web::Settings);
 
 use strict;
 
+use File::Spec;
 use List::Util qw(min max);
 
 use Slim::Utils::Prefs;
@@ -27,7 +28,8 @@ sub page {
 sub prefs {
 	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix 
 			playlist_suffix country max_items APIkey client_id client_secret live_delay 
-			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour), @bool);
+			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour
+			download_output_playlist download_output_video download_media_folder), @bool);
 }
 
 sub init {
@@ -75,7 +77,51 @@ if ($params->{flushcache}) {
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
 	$params->{pref_live_delay} = max($params->{pref_live_delay}, 30);
 	$params->{pref_APIkey} =~ s/^\s+|\s+$//g;
-		
+
+	# Validate the media folder path when the user saves settings.
+	# We only check when a non-empty value is provided; blank means "use LMS
+	# audio folder", which we don't validate here (it was set by the user in
+	# LMS itself and is assumed to be valid).
+	if ($params->{saveSettings}) {
+		my $folder = $params->{pref_download_media_folder};
+		if (defined $folder) {
+			# Strip leading/trailing whitespace.
+			$folder =~ s/^\s+|\s+$//g;
+			# Strip surrounding shell quotes that users sometimes copy from
+			# a terminal (e.g. "/path/to/dir" or '/path/to/dir').
+			$folder =~ s/^(['"])(.*)\1$/$2/;
+			# Remove backslash-escaping of spaces (shell quoting artefact).
+			# e.g. /mnt/data/My\ Music → /mnt/data/My Music
+			$folder =~ s/\\ / /g;
+			# Write the cleaned value back so it gets saved to prefs.
+			$params->{pref_download_media_folder} = $folder;
+		}
+
+		if (defined $folder && $folder ne '') {
+			my ($status, $msg);
+			if (!-d $folder) {
+				$status = 'error';
+				$msg    = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_NOT_FOUND');
+			} else {
+				# -w is unreliable on Windows (tests only the read-only DOS
+				# attribute, ignores NTFS ACLs).  Probe with a real file create.
+				my $probe = File::Spec->catfile($folder, '.yt_write_test_' . $$);
+				if (open(my $fh, '>', $probe)) {
+					close($fh);
+					unlink($probe);
+					$status = 'ok';
+					$msg    = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_OK');
+				} else {
+					$status = 'error';
+					$msg    = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_NOT_WRITABLE');
+				}
+			}
+			$params->{download_folder_status} = $status;
+			$params->{download_folder_msg}    = $msg;
+			$log->info("Download folder check '$folder': $status");
+		}
+	}
+			
 	$cache->remove('yt:access_token') if $params->{clear_token};
 	
 	foreach (@bool) {

@@ -272,6 +272,18 @@
 						placeholder="[% 'PLUGIN_YOUTUBE_DOWNLOAD_MEDIAFOLDER_PLACEHOLDER' | string %]">
 				</td>
 			</tr>
+			[% IF download_folder_msg %]
+			<tr>
+				<td></td>
+				<td>
+					[% IF download_folder_status == 'ok' %]
+						<span class="status-success">&#10003; [% download_folder_msg %]</span>
+					[% ELSE %]
+						<span class="status-error">&#10007; [% download_folder_msg %]</span>
+					[% END %]
+				</td>
+			</tr>
+			[% END %]
 			<tr><td colspan="2" style="padding:6px 0 2px 0"><hr style="margin:0"></td></tr>
 			<tr>
 				<td style="padding:2px 8px 2px 0; white-space:nowrap">
