@@ -28,6 +28,7 @@ use Plugins::YouTube::Download;
 use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
 use constant VIDEO_BASE_URL  => 'http://www.youtube.com/watch?v=%s';
+use constant DOWNLOAD_ICON   => 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9Ii00ODAgLTE0NDAgMTkyMCAxOTIwIiBmaWxsPSIjNzU3NTc1Ij48cGF0aCBkPSJNMjgwLTI4MGg0MDB2LTgwSDI4MHptMjAwLTEyMCAxNjAtMTYwLTU2LTU2LTY0IDYydi0xNjZoLTgwdjE2NmwtNjQtNjItNTYgNTZ6bTAgMzIwcS04MyAwLTE1Ni0zMS41VDE5Ny0xOTd0LTg1LjUtMTI3VDgwLTQ4MHQzMS41LTE1NlQxOTctNzYzdDEyNy04NS41VDQ4MC04ODB0MTU2IDMxLjVUNzYzLTc2M3Q4NS41IDEyN1Q4ODAtNDgwdC0zMS41IDE1NlQ3NjMtMTk3dC0xMjcgODUuNVQ0ODAtODBtMC04MHExMzQgMCAyMjctOTN0OTMtMjI3LTkzLTIyNy0yMjctOTMtMjI3IDkzLTkzIDIyNyA5MyAyMjcgMjI3IDkzbTAtMzIwIi8+PC9zdmc+';
 
 my $WEBLINK_SUPPORTED_UA_RE = qr/iPeng|SqueezePad|OrangeSqueeze/i;
 
@@ -579,41 +580,45 @@ sub _renderList {
 			$item->{playall}	= 1;
 			$item->{duration}	= 'N/A';
 
-			my @videoItems;
-
 			if (my $lastpos = $cache->get("yt:lastpos-$id")) {
 				my $position = Slim::Utils::DateTime::timeFormat($lastpos);
 				$position =~ s/^0+[:\.]//;
-				push @videoItems, {
-					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
-					enclosure => {
-						type   => 'audio',
-						url    => STREAM_BASE_URL . $id,
-					},
-				}, {
-					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
-					enclosure => {
-						type   => 'audio',
-						url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
-					},
-				};
-			}
-
-			# Download option for individual videos
-			push @videoItems, {
-				name => cstring(undef, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-				type => 'link',
-				url  => sub {
-					my ($client, $cb, $args, $pt) = @_;
-					my $r = Plugins::YouTube::Download::startDownload('video', $id);
-					$cb->({ items => [{ type => 'text', name => $r->{message} }] });
-				},
-			};
-
-			if (@videoItems) {
+				# Last-position memory: offer resume/restart choice.
+				# Download is also included here so it remains reachable
+				# when the item switches to type=>link (the ... menu
+				# provider does not fire for link-type items in all skins).
 				$item->{type}  = 'link';
-				$item->{items} = \@videoItems;
+				$item->{items} = [
+					{
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+						enclosure => {
+							type => 'audio',
+							url  => STREAM_BASE_URL . $id,
+						},
+					},
+					{
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
+						enclosure => {
+							type => 'audio',
+							url  => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
+						},
+					},
+					{
+						name  => cstring(undef, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+						type  => 'link',
+						image => DOWNLOAD_ICON,
+						url   => sub {
+							my ($client, $cb, $args, $pt) = @_;
+							my $r = Plugins::YouTube::Download::startDownload('video', $id);
+							$cb->({ items => [{ type => 'text', name => $r->{message} }] });
+						},
+					},
+				];
 			}
+			# When there is no lastpos the item stays type=>playlist (default)
+			# with on_select=>play, so clicking plays immediately in both skins.
+			# Download is available via the ... context menu (downloadInfoMenu
+			# registerInfoProvider) in both Material and classic skin.
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name}           = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
 			$item->{favorites_url}  = 'ytplaylist://playlistId=' . $id;
@@ -627,8 +632,9 @@ sub _renderList {
 				playlistHandler($client, sub {
 					my $result = shift;
 					unshift @{ $result->{items} }, {
-						name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-						type => 'link',
+						name  => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+						type  => 'link',
+						image => DOWNLOAD_ICON,
 						url  => sub {
 							my ($c2, $cb2) = @_;
 							my $r = Plugins::YouTube::Download::startDownload('playlist', "playlistId=$id");
@@ -648,8 +654,9 @@ sub _renderList {
 				channelHandler($client, sub {
 					my $result = shift;
 					unshift @{ $result->{items} }, {
-						name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-						type => 'link',
+						name  => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+						type  => 'link',
+						image => DOWNLOAD_ICON,
 						url  => sub {
 							my ($c2, $cb2) = @_;
 							my $r = Plugins::YouTube::Download::startDownload('playlist', "channelId=$id");
@@ -806,9 +813,10 @@ sub downloadInfoMenu {
 	my $id = Plugins::YouTube::ProtocolHandler->getId($url) or return;
 
 	return {
-		type => 'link',
-		name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-		url  => sub {
+		type  => 'link',
+		name  => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+		image => DOWNLOAD_ICON,
+		url   => sub {
 			my ($c, $cb) = @_;
 			my $r = Plugins::YouTube::Download::startDownload('video', $id);
 			$cb->({ items => [{ type => 'text', name => $r->{message} }] });
