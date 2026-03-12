@@ -67,7 +67,10 @@ sub cliDownload {
 
 	unless ($url) {
 		$log->warn('youtube download: no URL supplied');
-		$request->addResult('error', 'No URL supplied');
+		$request->addResultLoop('item_loop', 0, 'text', Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_NO_URL'));
+		$request->addResultLoop('item_loop', 0, 'type', 'text');
+		$request->addResult('count', 1);
+		$request->addResult('offset', 0);
 		$request->setStatusDone();
 		return;
 	}
@@ -76,14 +79,50 @@ sub cliDownload {
 
 	unless ($type && $id) {
 		$log->warn("youtube download: cannot parse URL '$url'");
-		$request->addResult('error', "Cannot parse URL: $url");
+		$request->addResultLoop('item_loop', 0, 'text', Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_BAD_URL'));
+		$request->addResultLoop('item_loop', 0, 'type', 'text');
+		$request->addResult('count', 1);
+		$request->addResult('offset', 0);
 		$request->setStatusDone();
 		return;
 	}
 
 	my $result = startDownload($type, $id);
-	$request->addResult('result', $result->{message});
-	$request->addResult('pid',    $result->{pid}) if $result->{pid};
+	
+	# Format as a proper menu structure that Material will display
+	if ($result->{pid}) {
+		# Success - show download started message with PID
+		$request->addResultLoop('item_loop', 0, 'text', 
+			Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_STARTED'));
+		$request->addResultLoop('item_loop', 0, 'type', 'text');
+		
+		# Extract just the URL part from the message to avoid duplication
+		my ($url_part) = $result->{message} =~ /(https?:\/\/[^\s]+)/;
+		$request->addResultLoop('item_loop', 1, 'text', $url_part);
+		$request->addResultLoop('item_loop', 1, 'type', 'text');
+		$request->addResultLoop('item_loop', 1, 'style', 'indent');
+		
+		$request->addResultLoop('item_loop', 2, 'text', 
+			sprintf(Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_PID'), $result->{pid}));
+		$request->addResultLoop('item_loop', 2, 'type', 'text');
+		
+		$request->addResult('count', 3);
+	} else {
+		# Error case
+		$request->addResultLoop('item_loop', 0, 'text', 
+			Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_FAILED'));
+		$request->addResultLoop('item_loop', 0, 'type', 'text');
+		
+		if ($result->{message}) {
+			$request->addResultLoop('item_loop', 1, 'text', $result->{message});
+			$request->addResultLoop('item_loop', 1, 'type', 'text');
+			$request->addResult('count', 2);
+		} else {
+			$request->addResult('count', 1);
+		}
+	}
+	
+	$request->addResult('offset', 0);
 	$request->setStatusDone();
 }
 

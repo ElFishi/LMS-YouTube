@@ -778,6 +778,12 @@ PLUGIN_YOUTUBE_DOWNLOAD_MEDIAFOLDER
 	DE	Medienordner (Stammverzeichnis)
 	EN	Media folder root
 
+PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER
+	EN	Default music folder
+	DE	Standard-Musikordner
+	DA	Standard musikmappe
+	CS	Výchozí hudební složka
+
 PLUGIN_YOUTUBE_DOWNLOAD_MEDIAFOLDER_PLACEHOLDER
 	CS	(ponechte prázdné pro použití složky zvuku LMS)
 	DA	(lad stå tomt for at bruge LMS-lydfolder)
@@ -837,3 +843,57 @@ PLUGIN_YOUTUBE_DOWNLOAD_FOLDER_NOT_WRITABLE
 	DA	Mappen findes, men LMS kan ikke skrive til den.
 	DE	Ordner gefunden, aber LMS hat keine Schreibrechte.
 	EN	Folder exists but LMS does not have write permission.
+
+PLUGIN_YOUTUBE_DOWNLOAD_STARTED
+	EN	Download started
+	DE	Download gestartet
+	DA	Download startet
+	CS	Stahování zahájeno
+
+PLUGIN_YOUTUBE_DOWNLOAD_PID
+	EN	Process ID: %s
+	DE	Prozess-ID: %s
+	DA	Proces-ID: %s
+	CS	ID procesu: %s
+
+PLUGIN_YOUTUBE_DOWNLOAD_NO_URL
+	EN	Error: No URL supplied
+	DE	Fehler: Keine URL angegeben
+	DA	Fejl: Ingen URL angivet
+	CS	Chyba: Nebyla zadána URL
+
+PLUGIN_YOUTUBE_DOWNLOAD_BAD_URL
+	EN	Error: Cannot parse URL
+	DE	Fehler: URL kann nicht verarbeitet werden
+	DA	Fejl: Kan ikke fortolke URL
+	CS	Chyba: Nelze zpracovat URL
+
+PLUGIN_YOUTUBE_DOWNLOAD_FAILED
+	EN	Download failed
+	DE	Download fehlgeschlagen
+	DA	Download mislykkedes
+	CS	Stahování se nezdařilo
+
+PLUGIN_YOUTUBE_DOWNLOAD_PLAYLIST
+	EN	Download Playlist: %s
+	DE	Playlist herunterladen: %s
+	DA	Download afspilleliste: %s
+	CS	Stáhnout seznam skladeb: %s
+
+PLUGIN_YOUTUBE_FILES_SAVED_TO
+	EN	Files will be saved to:
+	DE	Dateien werden gespeichert unter:
+	DA	Filer vil blive gemt i:
+	CS	Soubory budou uloženy do:
+
+PLUGIN_YOUTUBE_ERROR_NO_PLAYLIST_ID
+	EN	Error: no playlist ID
+	DE	Fehler: keine Playlist-ID
+	DA	Fejl: ingen afspilleliste-ID
+	CS	Chyba: chybí ID seznamu skladeb
+
+PLUGIN_YOUTUBE_ERROR_NO_VIDEO_ID
+	EN	Error: no video ID
+	DE	Fehler: keine Video-ID
+	DA	Fejl: ingen video-ID
+	CS	Chyba: chybí ID videa

@@ -137,6 +137,11 @@ sub initPlugin {
 	Slim::Control::Request::addDispatch(['youtube', 'info'],
 		[1, 1, 1, \&cliInfoQuery]);
 
+	
+	Slim::Control::Request::addDispatch(['youtube', 'playlist', 'info'],
+		[0, 1, 1, \&cliPlaylistInfo]);  # [no client needed, is a query, has tags]
+			
+
 	# Register the download command (no client required)
 	Plugins::YouTube::Download::registerCLI();
 }
@@ -408,6 +413,19 @@ sub playlistHandler {
 	}, $params);
 }
 
+sub playlistDownloadHandler {
+	my ($client, $cb, $args, $pt) = @_;
+	my $id = $pt->{playlistId} or do {
+		$cb->({ items => [{ 
+			type => 'text', 
+			name => cstring($client, 'PLUGIN_YOUTUBE_ERROR_NO_PLAYLIST_ID') 
+		}] });
+		return;
+	};
+	my $r = Plugins::YouTube::Download::startDownload('playlist', "playlistId=$id");
+	$cb->({ items => [{ type => 'text', name => $r->{message} }] });
+}
+
 sub playlistIdHandler {
 	my ($client, $cb, $args) = @_;
 	my $url = delete $args->{search};
@@ -580,92 +598,74 @@ sub _renderList {
 			$item->{playall}	= 1;
 			$item->{duration}	= 'N/A';
 
+			my @subItems = (
+				{
+					name        => cstring(undef, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+					type        => 'url',
+					image       => DOWNLOAD_ICON,
+					url         => \&downloadHandler,
+					passthrough => [ { videoId => $id } ],
+				},
+			);
+
 			if (my $lastpos = $cache->get("yt:lastpos-$id")) {
 				my $position = Slim::Utils::DateTime::timeFormat($lastpos);
 				$position =~ s/^0+[:\.]//;
-				# Last-position memory: offer resume/restart choice.
-				# Download is also included here so it remains reachable
-				# when the item switches to type=>link (the ... menu
-				# provider does not fire for link-type items in all skins).
-				$item->{type}  = 'link';
-				$item->{items} = [
-					{
-						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
-						enclosure => {
-							type => 'audio',
-							url  => STREAM_BASE_URL . $id,
-						},
+				push @subItems, {
+					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+					enclosure => {
+						type => 'audio',
+						url  => STREAM_BASE_URL . $id,
 					},
-					{
-						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
-						enclosure => {
-							type => 'audio',
-							url  => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
-						},
+				}, {
+					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
+					enclosure => {
+						type => 'audio',
+						url  => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
 					},
-					{
-						name  => cstring(undef, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-						type  => 'link',
-						image => DOWNLOAD_ICON,
-						url   => sub {
-							my ($client, $cb, $args, $pt) = @_;
-							my $r = Plugins::YouTube::Download::startDownload('video', $id);
-							$cb->({ items => [{ type => 'text', name => $r->{message} }] });
-						},
+				};
+			} else {
+				push @subItems, {
+					title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+					enclosure => {
+						type => 'audio',
+						url  => STREAM_BASE_URL . $id,
 					},
-				];
+				};
 			}
-			# When there is no lastpos the item stays type=>playlist (default)
-			# with on_select=>play, so clicking plays immediately in both skins.
-			# Download is available via the ... context menu (downloadInfoMenu
-			# registerInfoProvider) in both Material and classic skin.
+
+			$item->{type}  = 'link';
+			$item->{items} = \@subItems;
+
+
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name}           = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
 			$item->{favorites_url}  = 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type} = 'playlist';
-			# Wrap playlistHandler to prepend a Download item to the song list.
-			# This keeps all original play/queue/browse behaviour intact while
-			# adding Download as the first entry when the user opens the playlist.
-			$item->{passthrough}    = [ {} ];
-			$item->{url}            = sub {
-				my ($client, $cb, $args, $pt) = @_;
-				playlistHandler($client, sub {
-					my $result = shift;
-					unshift @{ $result->{items} }, {
-						name  => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-						type  => 'link',
-						image => DOWNLOAD_ICON,
-						url  => sub {
-							my ($c2, $cb2) = @_;
-							my $r = Plugins::YouTube::Download::startDownload('playlist', "playlistId=$id");
-							$cb2->({ items => [{ type => 'text', name => $r->{message} }] });
-						},
-					};
-					$cb->($result);
-				}, $args, { playlistId => $id, %$passthrough });
+			$item->{url}            = \&playlistHandler;
+			$item->{passthrough}    = [ { playlistId => $id, %$passthrough } ];
+			
+			# Add itemActions for More menu (following Deezer pattern exactly)
+			$item->{itemActions} = {
+				info => {
+					command => ['youtube', 'playlist', 'info'],
+					fixedParams => {
+						id => $id,
+						name => $title,
+					},
+				},
 			};
+			
+			push @items, $item;
+			next;
+
+
 		} elsif ($kind eq 'youtube#channel') {
 			$item->{name}           = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
 			$item->{favorites_url}  = 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type} = 'playlist';
-			$item->{passthrough}    = [ {} ];
-			$item->{url}            = sub {
-				my ($client, $cb, $args, $pt) = @_;
-				channelHandler($client, sub {
-					my $result = shift;
-					unshift @{ $result->{items} }, {
-						name  => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-						type  => 'link',
-						image => DOWNLOAD_ICON,
-						url  => sub {
-							my ($c2, $cb2) = @_;
-							my $r = Plugins::YouTube::Download::startDownload('playlist', "channelId=$id");
-							$cb2->({ items => [{ type => 'text', name => $r->{message} }] });
-						},
-					};
-					$cb->($result);
-				}, $args, { channelId => $id, %$passthrough });
-			};
+			$item->{url}            = \&channelHandler;
+			$item->{passthrough}    = [ { channelId => $id, %$passthrough } ];
 		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
@@ -673,11 +673,13 @@ sub _renderList {
 		}
 
 		push @items, $item;
+
+		
 	}
 
 	# replace items in-situ as we want to keep offset and total
 	$list->{items} = \@items;
-	
+
 	return $list;
 }
 
@@ -807,6 +809,19 @@ sub searchInfoMenu {
 
 # Appears in the ... context menu for any currently-playing or browsed
 # youtube:// track.  Returns a Download item when the URL is a video.
+sub downloadHandler {
+	my ($client, $cb, $args, $pt) = @_;
+	my $id = $pt->{videoId} or do {
+		$cb->({ items => [{ 
+			type => 'text', 
+			name => cstring($client, 'PLUGIN_YOUTUBE_ERROR_NO_VIDEO_ID') 
+		}] });
+		return;
+	};
+	my $r = Plugins::YouTube::Download::startDownload('video', $id);
+	$cb->({ items => [{ type => 'text', name => $r->{message} }] });
+}
+
 sub downloadInfoMenu {
 	my ($client, $url, $obj, $remoteMeta) = @_;
 
@@ -814,13 +829,11 @@ sub downloadInfoMenu {
 
 	return {
 		type  => 'link',
-		name  => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-		image => DOWNLOAD_ICON,
-		url   => sub {
-			my ($c, $cb) = @_;
-			my $r = Plugins::YouTube::Download::startDownload('video', $id);
-			$cb->({ items => [{ type => 'text', name => $r->{message} }] });
-		},
+		name        => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+		image       => DOWNLOAD_ICON,
+		type        => 'url',
+		url         => \&downloadHandler,
+		passthrough => [ { videoId => $id } ],
 	};
 }
 
@@ -842,6 +855,45 @@ sub cliInfoQuery {
 	$request->addResult('offset', 0);
 
 	$request->setStatusDone();
+}
+
+sub cliPlaylistInfo {
+    my $request = shift;
+    
+    my $id = $request->getParam('id');
+    my $name = $request->getParam('name');
+    
+    $log->info("cliPlaylistInfo called - id: $id, name: $name");
+    
+    my $download_url = 'ytplaylist://playlistId=' . $id;
+    
+    # Get the target path to show in confirmation
+    my $media_folder = $prefs->get('download_media_folder') || 
+                       (preferences('server')->get('audiodir') || [''])->[0] || 
+                       Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
+    
+    # Download action - use localized string with playlist name
+    $request->addResultLoop('item_loop', 0, 'text', 
+        sprintf(Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_PLAYLIST'), $name));
+    $request->addResultLoop('item_loop', 0, 'type', 'text');
+    $request->addResultLoop('item_loop', 0, 'actions', {
+        go => {
+            cmd => ['youtube', 'download', $download_url],
+        },
+    });
+    
+    # Show target folder info as helpful text - use localized strings
+    $request->addResultLoop('item_loop', 1, 'text', 
+        Slim::Utils::Strings::string('PLUGIN_YOUTUBE_FILES_SAVED_TO'));
+    $request->addResultLoop('item_loop', 1, 'type', 'text');
+    
+    $request->addResultLoop('item_loop', 2, 'text', $media_folder);
+    $request->addResultLoop('item_loop', 2, 'type', 'text');
+    $request->addResultLoop('item_loop', 2, 'style', 'indent');
+    
+    $request->addResult('count', 3);
+    $request->addResult('offset', 0);
+    $request->setStatusDone();
 }
 
 1;
