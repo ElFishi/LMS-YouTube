@@ -645,7 +645,7 @@ sub _renderList {
 			$item->{url}            = \&playlistHandler;
 			$item->{passthrough}    = [ { playlistId => $id, %$passthrough } ];
 			
-			# Add itemActions for More menu (following Deezer pattern exactly)
+			# Add itemActions for More menu (following Deezer pattern)
 			$item->{itemActions} = {
 				info => {
 					command => ['youtube', 'playlist', 'info'],
@@ -828,7 +828,6 @@ sub downloadInfoMenu {
 	my $id = Plugins::YouTube::ProtocolHandler->getId($url) or return;
 
 	return {
-		type  => 'link',
 		name        => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
 		image       => DOWNLOAD_ICON,
 		type        => 'url',
@@ -862,6 +861,7 @@ sub cliPlaylistInfo {
     
     my $id = $request->getParam('id');
     my $name = $request->getParam('name');
+    my $client = $request->client();  # Get the client
     
     $log->info("cliPlaylistInfo called - id: $id, name: $name");
     
@@ -870,11 +870,11 @@ sub cliPlaylistInfo {
     # Get the target path to show in confirmation
     my $media_folder = $prefs->get('download_media_folder') || 
                        (preferences('server')->get('audiodir') || [''])->[0] || 
-                       Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
+                       cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
     
-    # Download action - use localized string with playlist name
+    # Just show download option (no need to repeat the name since it's in header)
     $request->addResultLoop('item_loop', 0, 'text', 
-        sprintf(Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_PLAYLIST'), $name));
+        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));  # Now using cstring with client
     $request->addResultLoop('item_loop', 0, 'type', 'text');
     $request->addResultLoop('item_loop', 0, 'actions', {
         go => {
@@ -882,9 +882,9 @@ sub cliPlaylistInfo {
         },
     });
     
-    # Show target folder info as helpful text - use localized strings
+    # Show target folder info as helpful text
     $request->addResultLoop('item_loop', 1, 'text', 
-        Slim::Utils::Strings::string('PLUGIN_YOUTUBE_FILES_SAVED_TO'));
+        cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO'));  # Now using cstring with client
     $request->addResultLoop('item_loop', 1, 'type', 'text');
     
     $request->addResultLoop('item_loop', 2, 'text', $media_folder);
