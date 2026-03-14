@@ -591,11 +591,12 @@ sub _renderList {
 
 		# now organize the item list
 		if ($kind eq 'youtube#video') {
-			
+			# dont't set type to audio to have icons
+			#$item->{type} 	   = 'audio';			
 			$item->{on_select} = 'play';
 			$item->{play}      = STREAM_BASE_URL . $id;
-			# $item->{type}      = 'audio';  
-			
+			$item->{playall}	= 1;
+
 			# Add itemActions for More menu
 			$item->{itemActions} = {
 				info => {
@@ -611,10 +612,10 @@ sub _renderList {
 			next;
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name}           = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
+			$item->{passthrough}    = [ { playlistId => $id, %$passthrough } ];
+			$item->{url}            = \&playlistHandler;
 			$item->{favorites_url}  = 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type} = 'playlist';
-			$item->{url}            = \&playlistHandler;
-			$item->{passthrough}    = [ { playlistId => $id, %$passthrough } ];
 			
 			# Add itemActions for More menu (following Deezer pattern)
 			$item->{itemActions} = {
@@ -629,14 +630,12 @@ sub _renderList {
 			
 			push @items, $item;
 			next;
-
-
 		} elsif ($kind eq 'youtube#channel') {
 			$item->{name}           = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
+			$item->{passthrough}    = [ { channelId => $id, %$passthrough } ];
+			$item->{url}            = \&channelHandler;
 			$item->{favorites_url}  = 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type} = 'playlist';
-			$item->{url}            = \&channelHandler;
-			$item->{passthrough}    = [ { channelId => $id, %$passthrough } ];
 		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
