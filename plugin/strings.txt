@@ -881,10 +881,10 @@ PLUGIN_YOUTUBE_DOWNLOAD_PLAYLIST
 	CS	Stáhnout seznam skladeb: %s
 
 PLUGIN_YOUTUBE_FILES_SAVED_TO
-	EN	Files will be saved to:
-	DE	Dateien werden gespeichert unter:
-	DA	Filer vil blive gemt i:
-	CS	Soubory budou uloženy do:
+	EN	Files will be saved to
+	DE	Dateien werden gespeichert unter
+	DA	Filer vil blive gemt i
+	CS	Soubory budou uloženy do
 
 PLUGIN_YOUTUBE_ERROR_NO_PLAYLIST_ID
 	EN	Error: no playlist ID

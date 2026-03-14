@@ -21,6 +21,7 @@ use POSIX qw(O_RDONLY O_WRONLY O_CREAT O_APPEND strftime);
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::OSDetect;
+use Slim::Utils::Strings qw(string cstring);
 
 use Plugins::YouTube::Utils;
 
@@ -36,8 +37,8 @@ sub registerCLI {
 	#        |  |  |has Tags
 	#        |  |  |  |Function to call
 	Slim::Control::Request::addDispatch(
-		['youtube', 'download'],
-		[0, 0, 0, \&cliDownload],
+			['youtube', 'download'],
+			[0, 0, 0, \&cliDownload],
 	);
 	$log->info('YouTube download CLI command registered');
 }
@@ -56,6 +57,7 @@ sub registerCLI {
 #   https://www.youtube.com/channel/<id>
 sub cliDownload {
 	my $request = shift;
+    my $client = $request->client();
 
 	if ($request->isNotCommand([['youtube'], ['download']])) {
 		$request->setStatusBadDispatch();
@@ -67,7 +69,7 @@ sub cliDownload {
 
 	unless ($url) {
 		$log->warn('youtube download: no URL supplied');
-		$request->addResultLoop('item_loop', 0, 'text', Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_NO_URL'));
+		$request->addResultLoop('item_loop', 0, 'text', cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_NO_URL'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
 		$request->addResult('count', 1);
 		$request->addResult('offset', 0);
@@ -79,7 +81,7 @@ sub cliDownload {
 
 	unless ($type && $id) {
 		$log->warn("youtube download: cannot parse URL '$url'");
-		$request->addResultLoop('item_loop', 0, 'text', Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_BAD_URL'));
+		$request->addResultLoop('item_loop', 0, 'text', cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_BAD_URL'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
 		$request->addResult('count', 1);
 		$request->addResult('offset', 0);
@@ -91,9 +93,9 @@ sub cliDownload {
 	
 	# Format as a proper menu structure that Material will display
 	if ($result->{pid}) {
-		# Success - show download started message with PID
+		# Success - show download started message with PID  and folder
 		$request->addResultLoop('item_loop', 0, 'text', 
-			Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_STARTED'));
+			cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_STARTED'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
 		
 		# Extract just the URL part from the message to avoid duplication
@@ -103,14 +105,23 @@ sub cliDownload {
 		$request->addResultLoop('item_loop', 1, 'style', 'indent');
 		
 		$request->addResultLoop('item_loop', 2, 'text', 
-			sprintf(Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_PID'), $result->{pid}));
+			sprintf(cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_PID'), $result->{pid}));
 		$request->addResultLoop('item_loop', 2, 'type', 'text');
 		
-		$request->addResult('count', 3);
+		# Add folder info
+		my $media_folder = $prefs->get('download_media_folder') || 
+						(preferences('server')->get('audiodir') || [''])->[0] || 
+						cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
+		
+		$request->addResultLoop('item_loop', 3, 'text', 
+			cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder);
+		$request->addResultLoop('item_loop', 3, 'type', 'text');
+		
+		$request->addResult('count', 4);
 	} else {
 		# Error case
 		$request->addResultLoop('item_loop', 0, 'text', 
-			Slim::Utils::Strings::string('PLUGIN_YOUTUBE_DOWNLOAD_FAILED'));
+			cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_FAILED'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
 		
 		if ($result->{message}) {
@@ -374,14 +385,28 @@ sub _outputTemplate {
 
 	if ($type eq 'video') {
 		my $tpl = $prefs->get('download_output_video');
-		return $tpl if $tpl;
+		if ($tpl) {
+			# If it's an absolute path, use it directly
+			if (File::Spec->file_name_is_absolute($tpl)) {
+				return $tpl;
+			}
+			# Otherwise, prepend the media folder
+			return File::Spec->catfile($mediaFolder, $tpl);
+		}
 		return join('/', $mediaFolder, 'YouTube', 'Singles',
 			'%(uploader)s - %(title)s.%(ext)s');
 	}
 
-	# Playlist / channel
+	# Playlist
 	my $tpl = $prefs->get('download_output_playlist');
-	return $tpl if $tpl;
+	if ($tpl) {
+		# If it's an absolute path, use it directly
+		if (File::Spec->file_name_is_absolute($tpl)) {
+			return $tpl;
+		}
+		# Otherwise, prepend the media folder
+		return File::Spec->catfile($mediaFolder, $tpl);
+	}
 
 	return join('/', $mediaFolder, 'YouTube',
 		'%(playlist)s',
