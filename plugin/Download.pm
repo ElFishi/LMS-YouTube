@@ -23,30 +23,43 @@ use Slim::Utils::Prefs;
 use Slim::Utils::OSDetect;
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Network;
+use Slim::Utils::Cache;
 
 use Plugins::YouTube::Utils;
 use Plugins::YouTube::Plugin ();
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
+my $cache = Slim::Utils::Cache->new();
+
 
 # ─── Public entry points ────────────────────────────────────────────────────
 
 # Called from Plugin::initPlugin to wire up the CLI command.
 sub registerCLI {
-	#        |requires Client
-	#        |  |is a Query
-	#        |  |  |has Tags
-	#        |  |  |  |Function to call
+	#		 |requires Client
+	#		 |  |is a Query
+	#		 |  |  |has Tags
+	#		 |  |  |  |Function to call
 
 	Slim::Control::Request::addDispatch(
 			['youtube', 'download', 'log'],
-			[0, 1, 1, \&cliDownloadLog],  # [no client, is query, has tags]
+			[0, 1, 1, \&cliDownloadLog],
 	);
 
 	Slim::Control::Request::addDispatch(
 			['youtube', 'download'],
 			[0, 0, 0, \&cliDownload],
+	);
+
+	Slim::Control::Request::addDispatch(
+			['youtube','video','info'],
+			[0, 1, 1,\&cliVideoInfo]
+	);
+
+	Slim::Control::Request::addDispatch(
+			['youtube','playlist','info'],
+			[0, 1 ,1,\&cliPlaylistInfo]
 	);
 
 	$log->info('YouTube download CLI command registered');
@@ -218,6 +231,87 @@ sub cliDownloadLog {
 	$request->addResult('offset', 0);
 
 	$request->setStatusDone();
+}
+
+sub cliVideoInfo {
+    my $request = shift;
+    
+    my $id = $request->getParam('id');
+    my $name = $request->getParam('name');
+    my $client = $request->client();
+    
+    $log->info("cliVideoInfo called - id: $id, name: $name");
+    
+    my $download_url = 'youtube://www.youtube.com/v/' . $id;
+	$log->info("URL will be: $download_url");
+
+    # Download option
+    $request->addResultLoop('item_loop', 0, 'text', 
+        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
+    $request->addResultLoop('item_loop', 0, 'type', 'text');
+    $request->addResultLoop('item_loop', 0, 'actions', {
+        go => {
+            cmd => ['youtube', 'download', $download_url],
+        },
+    });
+    
+    # Play from beginning
+    $request->addResultLoop('item_loop', 1, 'text', 
+        cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'));
+    $request->addResultLoop('item_loop', 1, 'type', 'text');
+    $request->addResultLoop('item_loop', 1, 'actions', {
+        go => {
+            cmd => ['playlist', 'play', $download_url],
+        },
+    });
+    
+    my $count = 2;
+    
+    # Play from last position if available
+    if (my $lastpos = $cache->get("yt:lastpos-$id")) {
+        my $position = Slim::Utils::DateTime::timeFormat($lastpos);
+        $position =~ s/^0+[:\.]//;
+        
+        $request->addResultLoop('item_loop', 2, 'text', 
+            sprintf(cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X'), $position));
+        $request->addResultLoop('item_loop', 2, 'type', 'text');
+        $request->addResultLoop('item_loop', 2, 'actions', {
+            go => {
+                cmd => ['playlist', 'play', $download_url . "&lastpos=$lastpos"],
+            },
+        });
+        
+        $count = 3;
+    }
+    
+    $request->addResult('count', $count);
+    $request->addResult('offset', 0);
+    $request->setStatusDone();
+}
+
+sub cliPlaylistInfo {
+    my $request = shift;
+
+    my $id   = $request->getParam('id');
+    my $name = $request->getParam('name');
+    my $client = $request->client();
+
+    $log->info("cliPlaylistInfo called - id: $id, name: $name");
+
+    my $download_url = 'ytplaylist://playlistId=' . $id;
+
+    $request->addResultLoop('item_loop', 0, 'text',
+        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
+    $request->addResultLoop('item_loop', 0, 'type', 'text');
+    $request->addResultLoop('item_loop', 0, 'actions', {
+        go => {
+            cmd => ['youtube', 'download', $download_url],
+        },
+    });
+
+    $request->addResult('count', 1);
+    $request->addResult('offset', 0);
+    $request->setStatusDone();
 }
 
 # Kick off a yt-dlp download.

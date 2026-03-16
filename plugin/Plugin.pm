@@ -140,12 +140,6 @@ sub initPlugin {
 	Slim::Control::Request::addDispatch(['youtube', 'info'],
 		[1, 1, 1, \&cliInfoQuery]);
 
-	Slim::Control::Request::addDispatch(['youtube', 'playlist', 'info'],
-		[0, 1, 1, \&cliPlaylistInfo]);
-
-	Slim::Control::Request::addDispatch(['youtube', 'video', 'info'],
-		[0, 1, 1, \&cliVideoInfo]);
-			
 	# Register the download command (no client required)
 	Plugins::YouTube::Download::registerCLI();
 }
@@ -768,86 +762,6 @@ sub searchInfoMenu {
 			},
 		   ],
 	};
-}
-
-sub cliVideoInfo {
-    my $request = shift;
-    
-    my $id = $request->getParam('id');
-    my $name = $request->getParam('name');
-    my $client = $request->client();
-    
-    $log->info("cliVideoInfo called - id: $id, name: $name");
-    
-    my $download_url = STREAM_BASE_URL . $id;
-    
-    # Download option
-    $request->addResultLoop('item_loop', 0, 'text', 
-        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-    $request->addResultLoop('item_loop', 0, 'type', 'text');
-    $request->addResultLoop('item_loop', 0, 'actions', {
-        go => {
-            cmd => ['youtube', 'download', $download_url],
-        },
-    });
-    
-    # Play from beginning
-    $request->addResultLoop('item_loop', 1, 'text', 
-        cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'));
-    $request->addResultLoop('item_loop', 1, 'type', 'text');
-    $request->addResultLoop('item_loop', 1, 'actions', {
-        go => {
-            cmd => ['playlist', 'play', $download_url],
-        },
-    });
-    
-    my $count = 2;
-    
-    # Play from last position if available
-    if (my $lastpos = $cache->get("yt:lastpos-$id")) {
-        my $position = Slim::Utils::DateTime::timeFormat($lastpos);
-        $position =~ s/^0+[:\.]//;
-        
-        $request->addResultLoop('item_loop', 2, 'text', 
-            sprintf(cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X'), $position));
-        $request->addResultLoop('item_loop', 2, 'type', 'text');
-        $request->addResultLoop('item_loop', 2, 'actions', {
-            go => {
-                cmd => ['playlist', 'play', $download_url . "&lastpos=$lastpos"],
-            },
-        });
-        
-        $count = 3;
-    }
-    
-    $request->addResult('count', $count);
-    $request->addResult('offset', 0);
-    $request->setStatusDone();
-}
-
-sub cliPlaylistInfo {
-    my $request = shift;
-
-    my $id   = $request->getParam('id');
-    my $name = $request->getParam('name');
-    my $client = $request->client();
-
-    $log->info("cliPlaylistInfo called - id: $id, name: $name");
-
-    my $download_url = 'ytplaylist://playlistId=' . $id;
-
-    $request->addResultLoop('item_loop', 0, 'text',
-        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-    $request->addResultLoop('item_loop', 0, 'type', 'text');
-    $request->addResultLoop('item_loop', 0, 'actions', {
-        go => {
-            cmd => ['youtube', 'download', $download_url],
-        },
-    });
-
-    $request->addResult('count', 1);
-    $request->addResult('offset', 0);
-    $request->setStatusDone();
 }
 
 1;
