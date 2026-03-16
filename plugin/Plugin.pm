@@ -125,8 +125,8 @@ sub initPlugin {
 		Plugins::YouTube::Settings->init();
 		Slim::Web::Pages->addPageFunction(
 			'plugins/YouTube/downloadlog.html', 
-			\&_webDownloadLog
-    );
+			\&Plugins::YouTube::Download::webDownloadLog
+		);
 	}
 
 	%recentlyPlayed = map { $_->{url} => $_ } reverse @{$prefs->get('recent')};
@@ -659,22 +659,6 @@ sub _getImage {
 	return ($hires || $prefs->get('highres_icons')) ? $candidates[0] : $candidates[-1];
 }
 
-sub _webDownloadLog {
-	my ($client, $params) = @_;
-	my $lines = Plugins::YouTube::Download::getLogLines();
-	my $content = join("\n", @$lines) || 'Log is empty.';
-	$content =~ s/&/&amp;/g;
-    $content =~ s/</&lt;/g;
-    $content =~ s/>/&gt;/g;
-
-	return \("
-<!DOCTYPE html><html><head><meta charset='utf-8'><meta http-equiv='Refresh' content='2'>
-<style>body{background-color:#1a1a1a;color:#ccc;height:100vh;overflow:hidden;margin:1rem;}
-pre{max-height:calc(100vh - 2rem);overflow:auto;scrollbar-width:none;display:flex;flex-direction:column-reverse;
-font-family:monospace;scroll-behavior:smooth;white-space:pre-wrap;}</style></head>
-<body><pre><div>" . Slim::Utils::Unicode::utf8encode($content) . "</div></pre></body></html>");
-}
-
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
 
@@ -795,68 +779,9 @@ sub downloadInfoMenu {
 	return {
 		name        => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
 		type        => 'url',
-		url         => \&downloadHandler,
+		url         => \&Plugins::YouTube::Download::downloadHandler,
 		passthrough => [ { videoId => $id } ],
 	};
-}
-
-sub downloadHandler {
-	my ($client, $cb, $args, $pt) = @_;
-	my $id = $pt->{videoId} or do {
-		$cb->({ items => [{ 
-			type => 'text', 
-			name => cstring($client, 'PLUGIN_YOUTUBE_ERROR_NO_VIDEO_ID') 
-		}] });
-		return;
-	};
-
-	my $index = $args->{index} || 0;
-	if ($index > 0) {
-		$cb->({ items => [] });
-		return;
-	}
-
-	my $r = Plugins::YouTube::Download::startDownload('video', $id);
-	my @items = ();
-
-	if ($r->{pid}) {
-		push @items, { type => 'text', name => $r->{message} };
-
-		if ($r->{message} =~ /(https?:\/\/[^\s]+)/) {
-			push @items, { type => 'text', name => $1, style => 'indent' };
-		}
-
-		push @items, { 
-			type => 'text', 
-			name => sprintf(cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_PID'), $r->{pid}),
-		};
-
-		my $media_folder = $prefs->get('download_media_folder') || 
-						(preferences('server')->get('audiodir') || [''])->[0] || 
-						cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
-
-		push @items, { 
-			type => 'text', 
-			name => cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder,
-		};
-
-		my $serverUrl = Slim::Utils::Network::serverURL();
-		push @items, {
-			type    => 'text',
-			name    => cstring($client, 'PLUGIN_YOUTUBE_VIEW_LOG'),
-			weblink => $serverUrl . '/plugins/YouTube/downloadlog.html',
-		};
-	} else {
-		push @items, { 
-			type => 'text', 
-			name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_FAILED'),
-		};
-		if ($r->{message}) {
-			push @items, { type => 'text', name => $r->{message} };
-		}
-	}
-
-	$cb->({ items => \@items });
 }
 
 sub cliVideoInfo {
