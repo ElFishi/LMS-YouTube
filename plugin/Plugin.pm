@@ -100,7 +100,7 @@ sub initPlugin {
 
 	Slim::Menu::TrackInfo->registerInfoProvider( youtubedownload => (
 		after => 'bottom',
-		func  => \&downloadInfoMenu,
+		func  => \&Plugins::YouTube::Download::downloadInfoMenu,,
 	) );
 
 	Slim::Menu::AlbumInfo->registerInfoProvider( youtube => (
@@ -767,20 +767,6 @@ sub searchInfoMenu {
 				passthrough => [ { videoCategoryId => 10, q => $query }]
 			},
 		   ],
-	};
-}
-
-# This creates the Download link in the video's ...More menu
-sub downloadInfoMenu {
-	my ($client, $url, $obj, $remoteMeta) = @_;
-
-	my $id = Plugins::YouTube::ProtocolHandler->getId($url) or return;
-
-	return {
-		name        => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
-		type        => 'url',
-		url         => \&Plugins::YouTube::Download::downloadHandler,
-		passthrough => [ { videoId => $id } ],
 	};
 }
 

@@ -635,6 +635,20 @@ sub downloadHandler {
 	$cb->({ items => \@items });
 }
 
+# This creates the Download link in the video's ...More menu
+sub downloadInfoMenu {
+	my ($client, $url, $obj, $remoteMeta) = @_;
+
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url) or return;
+
+	return {
+		name        => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'),
+		type        => 'url',
+		url         => \&Plugins::YouTube::Download::downloadHandler,
+		passthrough => [ { videoId => $id } ],
+	};
+}
+
 sub webDownloadLog {
 	my ($client, $params) = @_;
 	my $lines = Plugins::YouTube::Download::getLogLines();
