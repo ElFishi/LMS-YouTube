@@ -124,7 +124,7 @@ sub initPlugin {
 		Plugins::YouTube::Settings->new;
 		Plugins::YouTube::Settings->init();
 		Slim::Web::Pages->addPageFunction(
-			'plugins/YouTube/downloadlog.html', 
+			'plugins/YouTube/downloadlog.html',
 			\&Plugins::YouTube::Download::webDownloadLog
 		);
 	}
@@ -577,10 +577,10 @@ sub _renderList {
 		# now organize the item list
 		if ($kind eq 'youtube#video') {
 			# dont't set type to audio to have icons
-			#$item->{type} 	   = 'audio';			
+			#$item->{type} 	   = 'audio';
 			$item->{on_select} = 'play';
 			$item->{play}      = STREAM_BASE_URL . $id;
-			$item->{playall}	= 1;
+			$item->{playall}   = 1;
 
 			# Add itemActions for More menu
 			$item->{itemActions} = {
@@ -593,7 +593,7 @@ sub _renderList {
 				},
 				more => Plugins::YouTube::Download::makeDownloadAction('video', $id),
 			};
-			
+
 			push @items, $item;
 			next;
 		} elsif ($kind eq 'youtube#playlist') {
@@ -602,7 +602,7 @@ sub _renderList {
 			$item->{url}            = \&playlistHandler;
 			$item->{favorites_url}  = 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type} = 'playlist';
-			
+
 			# Add itemActions for More menu (following Deezer pattern)
 			$item->{itemActions} = {
 				info => {
@@ -614,7 +614,7 @@ sub _renderList {
 				},
 				more => Plugins::YouTube::Download::makeDownloadAction('playlist', $id),
 			};
-			
+
 			push @items, $item;
 			next;
 		} elsif ($kind eq 'youtube#channel') {
@@ -762,6 +762,25 @@ sub searchInfoMenu {
 			},
 		   ],
 	};
+}
+
+# special query to allow weblink to be sent to iPeng
+sub cliInfoQuery {
+	my $request = shift;
+
+	if ($request->isNotQuery([['youtube'], ['info']])) {
+			$request->setStatusBadDispatch();
+			return;
+	}
+
+	my $id = $request->getParam('id');
+
+	$request->addResultLoop('item_loop', 0, 'text', cstring($request->client, 'PLUGIN_YOUTUBE_PLAYLINK'));
+	$request->addResultLoop('item_loop', 0, 'weblink', sprintf(VIDEO_BASE_URL, $id));
+	$request->addResult('count', 1);
+	$request->addResult('offset', 0);
+
+	$request->setStatusDone();
 }
 
 1;

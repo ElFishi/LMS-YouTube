@@ -16,6 +16,7 @@ use strict;
 use warnings;
 
 use File::Spec;
+use File::ReadBackwards;
 use POSIX qw(O_RDONLY O_WRONLY O_CREAT O_APPEND strftime);
 
 use Slim::Utils::Log;
@@ -79,8 +80,8 @@ sub registerCLI {
 #   https://www.youtube.com/channel/<id>
 
 sub cliDownload {
-    my $request = shift;
-    my $client = $request->client();
+	my $request = shift;
+	my $client = $request->client();
 
 	if ($request->isNotCommand([['youtube'], ['download']])) {
 		$request->setStatusBadDispatch();
@@ -89,6 +90,8 @@ sub cliDownload {
 
 	# Accept both positional (_p2) and tagged (url:) forms.
 	my $url = $request->getParam('_p2') // $request->getParam('url');
+	# _p2 is the second positional parameter when called as ["youtube","download","URL"]
+	# The tagged form "url:URL" is used by the UI's itemActions
 
 	unless ($url) {
 		$log->warn('youtube download: no URL supplied');
@@ -113,47 +116,47 @@ sub cliDownload {
 	}
 
 	my $result = startDownload($type, $id);
-	
+
 	# Format as a proper menu structure that Material will display
 	if ($result->{pid}) {
 		# Success - show download started message with PID and folder
-		$request->addResultLoop('item_loop', 0, 'text', 
+		$request->addResultLoop('item_loop', 0, 'text',
 			cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_STARTED'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
-		
+
 		# Extract just the URL part from the message to avoid duplication
 		my ($url_part) = $result->{message} =~ /(https?:\/\/[^\s]+)/;
 		$request->addResultLoop('item_loop', 1, 'text', $url_part);
 		$request->addResultLoop('item_loop', 1, 'type', 'text');
 		$request->addResultLoop('item_loop', 1, 'style', 'indent');
-		
-		$request->addResultLoop('item_loop', 2, 'text', 
+
+		$request->addResultLoop('item_loop', 2, 'text',
 			sprintf(cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_PID'), $result->{pid}));
 		$request->addResultLoop('item_loop', 2, 'type', 'text');
-		
+
 		# Add folder info
-		my $media_folder = $prefs->get('download_media_folder') || 
-						(preferences('server')->get('audiodir') || [''])->[0] || 
+		my $media_folder = $prefs->get('download_media_folder') ||
+						(preferences('server')->get('audiodir') || [''])->[0] ||
 						cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
-		
-		$request->addResultLoop('item_loop', 3, 'text', 
+
+		$request->addResultLoop('item_loop', 3, 'text',
 			cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder);
 		$request->addResultLoop('item_loop', 3, 'type', 'text');
-		
+
 		# Add View Log option
 		$request->addResultLoop('item_loop', 4, 'text',
 			cstring($client, 'PLUGIN_YOUTUBE_VIEW_LOG'));
 		$request->addResultLoop('item_loop', 4, 'type', 'link');
-		$request->addResultLoop('item_loop', 4, 'weblink', 
+		$request->addResultLoop('item_loop', 4, 'weblink',
 			Slim::Utils::Network::serverURL() . '/plugins/YouTube/downloadlog.html');
 
 		$request->addResult('count', 5);
 	} else {
 		# Error case
-		$request->addResultLoop('item_loop', 0, 'text', 
+		$request->addResultLoop('item_loop', 0, 'text',
 			cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_FAILED'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
-		
+
 		if ($result->{message}) {
 			$request->addResultLoop('item_loop', 1, 'text', $result->{message});
 			$request->addResultLoop('item_loop', 1, 'type', 'text');
@@ -162,34 +165,34 @@ sub cliDownload {
 			$request->addResult('count', 1);
 		}
 	}
-	
+
 	$request->addResult('offset', 0);
 	$request->setStatusDone();
 }
 
 # Log viewer handler
 sub cliDownloadLog {
-    my $request = shift;
-    my $client = $request->client();
+	my $request = shift;
+	my $client = $request->client();
 
 	$log->info("cliDownloadLog called");
-	
+
 	# Set window title
-	my $title = $client 
-		? cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_LOG_TITLE') 
+	my $title = $client
+		? cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_LOG_TITLE')
 		: string('PLUGIN_YOUTUBE_DOWNLOAD_LOG_TITLE');
 	$title ||= 'Download Log';
 	$request->addResult('title', $title);
 
 	my $logFile = _logFile();
 	my @lines = ();
-	
+
 	if (-f $logFile) {
 		open(my $fh, '<:encoding(UTF-8)', $logFile);
 		@lines = <$fh>;
 		close($fh);
 		chomp @lines;
-		
+
 		# Find the last separator
 		my $last_separator = -1;
 		for (my $i = $#lines; $i >= 0; $i--) {
@@ -198,7 +201,7 @@ sub cliDownloadLog {
 				last;
 			}
 		}
-		
+
 		# If we found a separator, show from there to the end
 		if ($last_separator >= 0) {
 			@lines = @lines[$last_separator .. $#lines];
@@ -209,9 +212,9 @@ sub cliDownloadLog {
 			@lines = @lines[$start .. $#lines];
 		}
 	}
-	
+
 	my $index = 0;
-	
+
 	if (@lines) {
 		foreach my $line (@lines) {
 			# Ensure the line is UTF-8 encoded
@@ -221,97 +224,105 @@ sub cliDownloadLog {
 			$index++;
 		}
 	} else {
-		$request->addResultLoop('item_loop', $index, 'text', 
+		$request->addResultLoop('item_loop', $index, 'text',
 			cstring($client, 'PLUGIN_YOUTUBE_LOG_EMPTY'));
 		$request->addResultLoop('item_loop', $index, 'type', 'text');
 		$index++;
 	}
-	
+
 	$request->addResult('count', $index);
 	$request->addResult('offset', 0);
 
 	$request->setStatusDone();
 }
 
+# CLI handler for video information menu
+# Returns a menu with download and playback options for a specific video
+# Parameters: id (YouTube video ID), name (optional video title)
+# Called from the video's "More" menu in the UI
 sub cliVideoInfo {
-    my $request = shift;
-    
-    my $id = $request->getParam('id');
-    my $name = $request->getParam('name');
-    my $client = $request->client();
-    
-    $log->info("cliVideoInfo called - id: $id, name: $name");
-    
-    my $download_url = 'youtube://www.youtube.com/v/' . $id;
+	my $request = shift;
+
+	my $id = $request->getParam('id');
+	my $name = $request->getParam('name');
+	my $client = $request->client();
+
+	$log->info("cliVideoInfo called - id: $id, name: $name");
+
+	my $download_url = 'youtube://www.youtube.com/v/' . $id;
 	$log->info("URL will be: $download_url");
 
-    # Download option
-    $request->addResultLoop('item_loop', 0, 'text', 
-        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-    $request->addResultLoop('item_loop', 0, 'type', 'text');
-    $request->addResultLoop('item_loop', 0, 'actions', {
-        go => {
-            cmd => ['youtube', 'download', $download_url],
-        },
-    });
-    
-    # Play from beginning
-    $request->addResultLoop('item_loop', 1, 'text', 
-        cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'));
-    $request->addResultLoop('item_loop', 1, 'type', 'text');
-    $request->addResultLoop('item_loop', 1, 'actions', {
-        go => {
-            cmd => ['playlist', 'play', $download_url],
-        },
-    });
-    
-    my $count = 2;
-    
-    # Play from last position if available
-    if (my $lastpos = $cache->get("yt:lastpos-$id")) {
-        my $position = Slim::Utils::DateTime::timeFormat($lastpos);
-        $position =~ s/^0+[:\.]//;
-        
-        $request->addResultLoop('item_loop', 2, 'text', 
-            sprintf(cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X'), $position));
-        $request->addResultLoop('item_loop', 2, 'type', 'text');
-        $request->addResultLoop('item_loop', 2, 'actions', {
-            go => {
-                cmd => ['playlist', 'play', $download_url . "&lastpos=$lastpos"],
-            },
-        });
-        
-        $count = 3;
-    }
-    
-    $request->addResult('count', $count);
-    $request->addResult('offset', 0);
-    $request->setStatusDone();
+	# Download option
+	$request->addResultLoop('item_loop', 0, 'text',
+		cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
+	$request->addResultLoop('item_loop', 0, 'type', 'text');
+	$request->addResultLoop('item_loop', 0, 'actions', {
+		go => {
+			cmd => ['youtube', 'download', $download_url],
+		},
+	});
+
+	# Play from beginning
+	$request->addResultLoop('item_loop', 1, 'text',
+		cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'));
+	$request->addResultLoop('item_loop', 1, 'type', 'text');
+	$request->addResultLoop('item_loop', 1, 'actions', {
+		go => {
+			cmd => ['playlist', 'play', $download_url],
+		},
+	});
+
+	my $count = 2;
+
+	# Play from last position if available
+	if (my $lastpos = $cache->get("yt:lastpos-$id")) {
+		my $position = Slim::Utils::DateTime::timeFormat($lastpos);
+		$position =~ s/^0+[:\.]//;
+
+		$request->addResultLoop('item_loop', 2, 'text',
+			sprintf(cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X'), $position));
+		$request->addResultLoop('item_loop', 2, 'type', 'text');
+		$request->addResultLoop('item_loop', 2, 'actions', {
+			go => {
+				cmd => ['playlist', 'play', $download_url . "&lastpos=$lastpos"],
+			},
+		});
+
+		$count = 3;
+	}
+
+	$request->addResult('count', $count);
+	$request->addResult('offset', 0);
+	$request->setStatusDone();
 }
 
+# CLI handler for playlist information menu
+# Returns a menu with download option for a specific playlist
+# Parameters: id (playlist ID), name (optional playlist title)
+# Called from the playlist's "More" menu in the UI
 sub cliPlaylistInfo {
-    my $request = shift;
+	my $request = shift;
 
-    my $id   = $request->getParam('id');
-    my $name = $request->getParam('name');
-    my $client = $request->client();
+	my $id   = $request->getParam('id');
+	my $name = $request->getParam('name');
+	my $client = $request->client();
 
-    $log->info("cliPlaylistInfo called - id: $id, name: $name");
+	$log->info("cliPlaylistInfo called - id: $id, name: $name");
 
-    my $download_url = 'ytplaylist://playlistId=' . $id;
+	my $download_url = 'ytplaylist://playlistId=' . $id;
 
-    $request->addResultLoop('item_loop', 0, 'text',
-        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-    $request->addResultLoop('item_loop', 0, 'type', 'text');
-    $request->addResultLoop('item_loop', 0, 'actions', {
-        go => {
-            cmd => ['youtube', 'download', $download_url],
-        },
-    });
+	$request->addResultLoop('item_loop', 0, 'text',
+		cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
+	$request->addResultLoop('item_loop', 0, 'type', 'text');
+	$request->addResultLoop('item_loop', 0, 'actions', {
+		go => {
+			cmd => ['youtube', 'download', $download_url],
+		},
+	});
 
-    $request->addResult('count', 1);
-    $request->addResult('offset', 0);
-    $request->setStatusDone();
+	$request->addResult('count', 1);
+	$request->addResult('offset', 0);
+	$request->setStatusDone();
 }
 
 # Kick off a yt-dlp download.
@@ -410,10 +421,10 @@ sub _launchUnix {
 		if (defined $log_fd && $log_fd >= 0) {
 			my $timestamp = POSIX::strftime("\n=== %Y-%m-%d %H:%M:%S ===\n", localtime);
 			POSIX::write($log_fd, $timestamp, length($timestamp));
-			
+
 			my $cmd_line = join(' ', @cmd) . "\n";
 			POSIX::write($log_fd, $cmd_line, length($cmd_line));
-			
+
 			POSIX::dup2($log_fd, 1);
 			POSIX::dup2($log_fd, 2);
 			POSIX::close($log_fd) if $log_fd > 2;
@@ -599,14 +610,14 @@ sub _buildCommand {
 	my @cmd = (
 		$binary,
 		$ytUrl,
-		'-x',
-		'-o', $output,
-		'-f', 'bestaudio',
+		'-x',                          # Extract audio
+		'-o', $output,                 # Output template
+		'-f', 'bestaudio',             # Best audio quality only
 		'--parse-metadata', 'playlist_index:%(track_number)s',
 		'--parse-metadata', '%(release_date,upload_date)s:(?P<meta_date>[0-9]{4})',
-		'--embed-metadata',
-		'--embed-thumbnail',
-		'--convert-thumbnails', 'jpg',
+		'--embed-metadata',            # Add metadata to file
+		'--embed-thumbnail',           # Add thumbnail as cover art
+		'--convert-thumbnails', 'jpg', # Ensure thumbnail is JPEG
 		'--postprocessor-args',
 			'ThumbnailsConvertor:-vf scale=500:500:force_original_aspect_ratio=increase,crop=500:500',
 	);
@@ -654,28 +665,34 @@ sub _logFile {
 	return File::Spec->catfile($logDir, 'yt-dlp-download.log');
 }
 
+# Creates the data structure for the download action in item menus
+# Returns a hashref with command and parameters for the download CLI command
+# Used by Plugin.pm when rendering video and playlist items
 sub makeDownloadAction {
-    my ($type, $id) = @_;
-    return {
-        command => ['youtube', 'download'],
-        fixedParams => {
-            url => $type eq 'video' 
-                ? 'youtube://www.youtube.com/v/' . $id 
+	my ($type, $id) = @_;
+	return {
+		command => ['youtube', 'download'],
+		fixedParams => {
+			url => $type eq 'video'
+				? 'youtube://www.youtube.com/v/' . $id
 				# avoid circular reference by importing STREAM_BASE_URL
-                : 'ytplaylist://playlistId=' . $id,
-        },
-    };
+				: 'ytplaylist://playlistId=' . $id,
+		},
+	};
 }
 
+# OPML handler for the download menu item
+# Called when user selects "Download" from a video's More menu
+# Initiates the download and returns status information to display
 sub downloadHandler {
 	my ($client, $cb, $args, $pt) = @_;
 
 	my $prefs = preferences('plugin.youtube');
 
 	my $id = $pt->{videoId} or do {
-		$cb->({ items => [{ 
-			type => 'text', 
-			name => cstring($client, 'PLUGIN_YOUTUBE_ERROR_NO_VIDEO_ID') 
+		$cb->({ items => [{
+			type => 'text',
+			name => cstring($client, 'PLUGIN_YOUTUBE_ERROR_NO_VIDEO_ID')
 		}] });
 		return;
 	};
@@ -696,17 +713,17 @@ sub downloadHandler {
 			push @items, { type => 'text', name => $1, style => 'indent' };
 		}
 
-		push @items, { 
-			type => 'text', 
+		push @items, {
+			type => 'text',
 			name => sprintf(cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_PID'), $r->{pid}),
 		};
 
-		my $media_folder = $prefs->get('download_media_folder') || 
-						(preferences('server')->get('audiodir') || [''])->[0] || 
+		my $media_folder = $prefs->get('download_media_folder') ||
+						(preferences('server')->get('audiodir') || [''])->[0] ||
 						cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
 
-		push @items, { 
-			type => 'text', 
+		push @items, {
+			type => 'text',
 			name => cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder,
 		};
 
@@ -717,8 +734,8 @@ sub downloadHandler {
 			weblink => $serverUrl . '/plugins/YouTube/downloadlog.html',
 		};
 	} else {
-		push @items, { 
-			type => 'text', 
+		push @items, {
+			type => 'text',
 			name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_FAILED'),
 		};
 		if ($r->{message}) {
@@ -729,7 +746,9 @@ sub downloadHandler {
 	$cb->({ items => \@items });
 }
 
-# This creates the Download link in the video's ...More menu
+# Menu provider for the YouTube download option in track info
+# Registered as a track info provider in Plugin.pm
+# Returns a menu item that links to downloadHandler
 sub downloadInfoMenu {
 	my ($client, $url, $obj, $remoteMeta) = @_;
 
@@ -743,88 +762,58 @@ sub downloadInfoMenu {
 	};
 }
 
+# Web page handler for the download log viewer
+# Renders the log page using Template Toolkit
+# Shows progress by auto-refreshes
 sub webDownloadLog {
 	my ($client, $params) = @_;
-	my $lines = Plugins::YouTube::Download::getLogLines();
-	my $content = join("\n", @$lines) || 'Log is empty.';
+
+	my $content = getRecentLogContent();
 	$content =~ s/&/&amp;/g;
-    $content =~ s/</&lt;/g;
-    $content =~ s/>/&gt;/g;
+	$content =~ s/</&lt;/g;
+	$content =~ s/>/&gt;/g;
 
-	return \("
-<!DOCTYPE html><html><head><meta charset='utf-8'><meta http-equiv='Refresh' content='2'>
-<style>body{background-color:#1a1a1a;color:#ccc;height:100vh;overflow:hidden;margin:1rem;}
-pre{max-height:calc(100vh - 2rem);overflow:auto;scrollbar-width:none;display:flex;flex-direction:column-reverse;
-font-family:monospace;scroll-behavior:smooth;white-space:pre-wrap;}</style></head>
-<body><pre><div>" . Slim::Utils::Unicode::utf8encode($content) . "</div></pre></body></html>");
+	return Slim::Web::HTTP::filltemplatefile(
+		'plugins/YouTube/html/downloadlog.html',
+		{ content => Slim::Utils::Unicode::utf8encode($content) }
+	);
 }
 
-
-# Public helper for the OPML path (Plugin.pm downloadLogHandler).
-# Returns an arrayref of log lines (strings) for the most recent download,
-# or an empty arrayref if the log is absent or empty.
-sub getLogLines {
-    my @lines = parseLogFile();   # parseLogFile() already returns a flat list
-    return \@lines;
-}
-
-# Parse the download log to get entries for a specific PID or the most recent
-sub parseLogFile {
-	my ($pid) = @_;  # Optional: if provided, get log for specific PID
-	
+# Returns the most recent download log content as a single string
+sub getRecentLogContent {
 	my $logFile = _logFile();
-	return () unless -f $logFile;  # Return empty list, not empty arrayref
-	
-	my @entries = ();
-	my $current_entry = undef;
-	
-	open(my $fh, '<', $logFile) or return ();
-	
-	while (my $line = <$fh>) {
+	return cstring(undef, 'PLUGIN_YOUTUBE_LOG_EMPTY') unless -f $logFile;
+
+	# Use File::ReadBackwards for efficiency - avoids reading entire file
+	# Just reads from the end until we find the last separator
+	my $bw = File::ReadBackwards->new($logFile)
+		or return cstring(undef, 'PLUGIN_YOUTUBE_LOG_EMPTY');
+
+	my @lines;
+	my $found_separator = 0;
+
+	# Read backwards until we find the separator
+	while (defined(my $line = $bw->readline)) {
 		chomp $line;
-		
-		# Check for log entry divider (===)
+		unshift @lines, $line;
+
 		if ($line =~ /^=== \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ===/) {
-			# Start of new download entry
-			$current_entry = {
-				lines => [],
-				pid => undef,
-			};
-			push @entries, $current_entry;
-			
-			# Store the divider line
-			push @{$current_entry->{lines}}, $line;
+			$found_separator = 1;
+			last;
 		}
-		elsif ($current_entry) {
-			# Store the line regardless of whether we've found a PID yet
-			push @{$current_entry->{lines}}, $line;
-			
-			# Try to extract PID from yt-dlp command line if we haven't found it yet
-			if (!$current_entry->{pid} && $line =~ /pid (\d+)/) {
-				$current_entry->{pid} = $1;
-			}
-		}
+
+		# Safety: limit to 1000 lines to prevent memory issues
+		last if @lines > 1000;
 	}
-	
-	close($fh);
-	
-	# If PID provided, return that specific entry's lines as a flat array
-	if ($pid) {
-		foreach my $entry (@entries) {
-			# If entry has matching PID, or if it's the most recent entry and we're searching by PID
-			if ($entry->{pid} && $entry->{pid} == $pid) {
-				return @{$entry->{lines}};
-			}
-		}
-		# If we didn't find the PID, return empty
-		return ();
+
+	$bw->close();
+
+	# If we didn't find a separator, show the last 50 lines
+	if (!$found_separator && @lines > 50) {
+		@lines = @lines[-50 .. -1];
 	}
-	
-	# Otherwise return the most recent entry's lines as a flat array
-	if (@entries) {
-		return @{$entries[-1]->{lines}};
-	}
-	return ();
+
+	return join("\n", @lines) || cstring(undef, 'PLUGIN_YOUTUBE_LOG_EMPTY');
 }
 
 1;

@@ -121,7 +121,7 @@ if ($params->{flushcache}) {
 			$log->info("Download folder check '$folder': $status");
 		}
 	}
-			
+
 	$cache->remove('yt:access_token') if $params->{clear_token};
 	
 	foreach (@bool) {
