@@ -597,7 +597,7 @@ sub _renderList {
 						name => $title,
 					},
 				},
-				more => _makeDownloadAction('video', $id),
+				more => Plugins::YouTube::Download::makeDownloadAction('video', $id),
 			};
 			
 			push @items, $item;
@@ -618,7 +618,7 @@ sub _renderList {
 						name => $title,
 					},
 				},
-				more => _makeDownloadAction('playlist', $id),
+				more => Plugins::YouTube::Download::makeDownloadAction('playlist', $id),
 			};
 			
 			push @items, $item;
@@ -657,18 +657,6 @@ sub _getImage {
 
 	# return either the highest or lowest resolution
 	return ($hires || $prefs->get('highres_icons')) ? $candidates[0] : $candidates[-1];
-}
-
-sub _makeDownloadAction {
-    my ($type, $id) = @_;
-    return {
-        command => ['youtube', 'download'],
-        fixedParams => {
-            url => $type eq 'video' 
-                ? STREAM_BASE_URL . $id 
-                : 'ytplaylist://playlistId=' . $id,
-        },
-    };
 }
 
 sub _webDownloadLog {
