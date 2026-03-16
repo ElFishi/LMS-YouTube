@@ -24,14 +24,12 @@ use Slim::Utils::Prefs;
 use Slim::Utils::OSDetect;
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Network;
-use Slim::Utils::Cache;
 
 use Plugins::YouTube::Utils;
 use Plugins::YouTube::Plugin ();
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
-my $cache = Slim::Utils::Cache->new();
 
 
 # ─── Public entry points ────────────────────────────────────────────────────
@@ -51,16 +49,6 @@ sub registerCLI {
 	Slim::Control::Request::addDispatch(
 			['youtube', 'download'],
 			[0, 0, 0, \&cliDownload],
-	);
-
-	Slim::Control::Request::addDispatch(
-			['youtube','video','info'],
-			[0, 1, 1,\&cliVideoInfo]
-	);
-
-	Slim::Control::Request::addDispatch(
-			['youtube','playlist','info'],
-			[0, 1 ,1,\&cliPlaylistInfo]
 	);
 
 	$log->info('YouTube download CLI command registered');
@@ -233,95 +221,6 @@ sub cliDownloadLog {
 	$request->addResult('count', $index);
 	$request->addResult('offset', 0);
 
-	$request->setStatusDone();
-}
-
-# CLI handler for video information menu
-# Returns a menu with download and playback options for a specific video
-# Parameters: id (YouTube video ID), name (optional video title)
-# Called from the video's "More" menu in the UI
-sub cliVideoInfo {
-	my $request = shift;
-
-	my $id = $request->getParam('id');
-	my $name = $request->getParam('name');
-	my $client = $request->client();
-
-	$log->info("cliVideoInfo called - id: $id, name: $name");
-
-	my $download_url = 'youtube://www.youtube.com/v/' . $id;
-	$log->info("URL will be: $download_url");
-
-	# Download option
-	$request->addResultLoop('item_loop', 0, 'text',
-		cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-	$request->addResultLoop('item_loop', 0, 'type', 'text');
-	$request->addResultLoop('item_loop', 0, 'actions', {
-		go => {
-			cmd => ['youtube', 'download', $download_url],
-		},
-	});
-
-	# Play from beginning
-	$request->addResultLoop('item_loop', 1, 'text',
-		cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'));
-	$request->addResultLoop('item_loop', 1, 'type', 'text');
-	$request->addResultLoop('item_loop', 1, 'actions', {
-		go => {
-			cmd => ['playlist', 'play', $download_url],
-		},
-	});
-
-	my $count = 2;
-
-	# Play from last position if available
-	if (my $lastpos = $cache->get("yt:lastpos-$id")) {
-		my $position = Slim::Utils::DateTime::timeFormat($lastpos);
-		$position =~ s/^0+[:\.]//;
-
-		$request->addResultLoop('item_loop', 2, 'text',
-			sprintf(cstring($client, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X'), $position));
-		$request->addResultLoop('item_loop', 2, 'type', 'text');
-		$request->addResultLoop('item_loop', 2, 'actions', {
-			go => {
-				cmd => ['playlist', 'play', $download_url . "&lastpos=$lastpos"],
-			},
-		});
-
-		$count = 3;
-	}
-
-	$request->addResult('count', $count);
-	$request->addResult('offset', 0);
-	$request->setStatusDone();
-}
-
-# CLI handler for playlist information menu
-# Returns a menu with download option for a specific playlist
-# Parameters: id (playlist ID), name (optional playlist title)
-# Called from the playlist's "More" menu in the UI
-sub cliPlaylistInfo {
-	my $request = shift;
-
-	my $id   = $request->getParam('id');
-	my $name = $request->getParam('name');
-	my $client = $request->client();
-
-	$log->info("cliPlaylistInfo called - id: $id, name: $name");
-
-	my $download_url = 'ytplaylist://playlistId=' . $id;
-
-	$request->addResultLoop('item_loop', 0, 'text',
-		cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-	$request->addResultLoop('item_loop', 0, 'type', 'text');
-	$request->addResultLoop('item_loop', 0, 'actions', {
-		go => {
-			cmd => ['youtube', 'download', $download_url],
-		},
-	});
-
-	$request->addResult('count', 1);
-	$request->addResult('offset', 0);
 	$request->setStatusDone();
 }
 
