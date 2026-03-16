@@ -622,17 +622,17 @@ sub _renderList {
 						name => $title,
 					},
 				},
-				more => Plugins::YouTube::Download::makeDownloadAction('video', $id),
+				download => Plugins::YouTube::Download::makeDownloadAction('video', $id),
 			};
 
 			push @items, $item;
 			next;
 		} elsif ($kind eq 'youtube#playlist') {
-			$item->{name}           = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
-			$item->{passthrough}    = [ { playlistId => $id, %$passthrough } ];
-			$item->{url}            = \&playlistHandler;
-			$item->{favorites_url}  = 'ytplaylist://playlistId=' . $id;
-			$item->{favorites_type} = 'playlist';
+			$item->{name} = $tags ? $plTags->{prefix} . $title . $plTags->{suffix} : $title;
+			$item->{passthrough} = [ { playlistId => $id, %$passthrough } ];
+			$item->{url}         = \&playlistHandler;
+			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
+			$item->{favorites_type}	= 'playlist';
 
 			# Add itemActions for More menu
 			$item->{itemActions} = {
@@ -643,17 +643,17 @@ sub _renderList {
 						name => $title,
 					},
 				},
-				more => Plugins::YouTube::Download::makeDownloadAction('playlist', $id),
+				download => Plugins::YouTube::Download::makeDownloadAction('playlist', $id),
 			};
 
 			push @items, $item;
 			next;
 		} elsif ($kind eq 'youtube#channel') {
-			$item->{name}           = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
-			$item->{passthrough}    = [ { channelId => $id, %$passthrough } ];
-			$item->{url}            = \&channelHandler;
-			$item->{favorites_url}  = 'ytplaylist://channelId=' . $id;
-			$item->{favorites_type} = 'playlist';
+			$item->{name} = $tags ? $chTags->{prefix} . $title . $chTags->{suffix} : $title;
+			$item->{passthrough} = [ { channelId => $id, %$passthrough } ];
+			$item->{url}         = \&channelHandler;
+			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
+			$item->{favorites_type}	= 'playlist';
 		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
@@ -661,8 +661,6 @@ sub _renderList {
 		}
 
 		push @items, $item;
-
-
 	}
 
 	# replace items in-situ as we want to keep offset and total
