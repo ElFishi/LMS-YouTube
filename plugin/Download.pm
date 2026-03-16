@@ -22,6 +22,7 @@ use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::OSDetect;
 use Slim::Utils::Strings qw(string cstring);
+use Slim::Utils::Network;
 
 use Plugins::YouTube::Utils;
 
@@ -36,10 +37,17 @@ sub registerCLI {
 	#        |  |is a Query
 	#        |  |  |has Tags
 	#        |  |  |  |Function to call
+
+	Slim::Control::Request::addDispatch(
+			['youtube', 'download', 'log'],
+			[0, 1, 1, \&cliDownloadLog],  # [no client, is query, has tags]
+	);
+
 	Slim::Control::Request::addDispatch(
 			['youtube', 'download'],
 			[0, 0, 0, \&cliDownload],
 	);
+
 	$log->info('YouTube download CLI command registered');
 }
 
@@ -55,8 +63,9 @@ sub registerCLI {
 #   https://www.youtube.com/playlist?list=PL...
 #   https://music.youtube.com/playlist?list=PL...
 #   https://www.youtube.com/channel/<id>
+
 sub cliDownload {
-	my $request = shift;
+    my $request = shift;
     my $client = $request->client();
 
 	if ($request->isNotCommand([['youtube'], ['download']])) {
@@ -93,7 +102,7 @@ sub cliDownload {
 	
 	# Format as a proper menu structure that Material will display
 	if ($result->{pid}) {
-		# Success - show download started message with PID  and folder
+		# Success - show download started message with PID and folder
 		$request->addResultLoop('item_loop', 0, 'text', 
 			cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_STARTED'));
 		$request->addResultLoop('item_loop', 0, 'type', 'text');
@@ -117,7 +126,14 @@ sub cliDownload {
 			cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder);
 		$request->addResultLoop('item_loop', 3, 'type', 'text');
 		
-		$request->addResult('count', 4);
+		# Add View Log option
+		$request->addResultLoop('item_loop', 4, 'text',
+			cstring($client, 'PLUGIN_YOUTUBE_VIEW_LOG'));
+		$request->addResultLoop('item_loop', 4, 'type', 'link');
+		$request->addResultLoop('item_loop', 4, 'weblink', 
+			Slim::Utils::Network::serverURL() . '/plugins/YouTube/downloadlog.html');
+
+		$request->addResult('count', 5);
 	} else {
 		# Error case
 		$request->addResultLoop('item_loop', 0, 'text', 
@@ -134,6 +150,72 @@ sub cliDownload {
 	}
 	
 	$request->addResult('offset', 0);
+	$request->setStatusDone();
+}
+
+# Log viewer handler
+sub cliDownloadLog {
+    my $request = shift;
+    my $client = $request->client();
+
+	$log->info("cliDownloadLog called");
+	
+	# Set window title
+	my $title = $client 
+		? cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_LOG_TITLE') 
+		: string('PLUGIN_YOUTUBE_DOWNLOAD_LOG_TITLE');
+	$title ||= 'Download Log';
+	$request->addResult('title', $title);
+
+	my $logFile = _logFile();
+	my @lines = ();
+	
+	if (-f $logFile) {
+		open(my $fh, '<:encoding(UTF-8)', $logFile);
+		@lines = <$fh>;
+		close($fh);
+		chomp @lines;
+		
+		# Find the last separator
+		my $last_separator = -1;
+		for (my $i = $#lines; $i >= 0; $i--) {
+			if ($lines[$i] =~ /^=== \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ===/) {
+				$last_separator = $i;
+				last;
+			}
+		}
+		
+		# If we found a separator, show from there to the end
+		if ($last_separator >= 0) {
+			@lines = @lines[$last_separator .. $#lines];
+		} else {
+			# No separator found, just show last 50 lines as fallback
+			my $start = $#lines - 50;
+			$start = 0 if $start < 0;
+			@lines = @lines[$start .. $#lines];
+		}
+	}
+	
+	my $index = 0;
+	
+	if (@lines) {
+		foreach my $line (@lines) {
+			# Ensure the line is UTF-8 encoded
+			utf8::encode($line) if utf8::is_utf8($line);
+			$request->addResultLoop('item_loop', $index, 'text', $line);
+			$request->addResultLoop('item_loop', $index, 'type', 'text');
+			$index++;
+		}
+	} else {
+		$request->addResultLoop('item_loop', $index, 'text', 
+			cstring($client, 'PLUGIN_YOUTUBE_LOG_EMPTY'));
+		$request->addResultLoop('item_loop', $index, 'type', 'text');
+		$index++;
+	}
+	
+	$request->addResult('count', $index);
+	$request->addResult('offset', 0);
+
 	$request->setStatusDone();
 }
 
@@ -231,10 +313,12 @@ sub _launchUnix {
 			$log_fd = POSIX::open('/dev/null', O_WRONLY);
 		}
 		if (defined $log_fd && $log_fd >= 0) {
-			my $ts = POSIX::strftime(
-				"\n=== %Y-%m-%d %H:%M:%S " . join(' ', @cmd) . " ===\n",
-				localtime);
-			POSIX::write($log_fd, $ts, length($ts));
+			my $timestamp = POSIX::strftime("\n=== %Y-%m-%d %H:%M:%S ===\n", localtime);
+			POSIX::write($log_fd, $timestamp, length($timestamp));
+			
+			my $cmd_line = join(' ', @cmd) . "\n";
+			POSIX::write($log_fd, $cmd_line, length($cmd_line));
+			
 			POSIX::dup2($log_fd, 1);
 			POSIX::dup2($log_fd, 2);
 			POSIX::close($log_fd) if $log_fd > 2;
@@ -473,6 +557,73 @@ sub _logFile {
 	# guaranteed to exist in all LMS versions.
 	my ($logDir) = Slim::Utils::OSDetect::dirsFor('log');
 	return File::Spec->catfile($logDir, 'yt-dlp-download.log');
+}
+
+# Public helper for the OPML path (Plugin.pm downloadLogHandler).
+# Returns an arrayref of log lines (strings) for the most recent download,
+# or an empty arrayref if the log is absent or empty.
+sub getLogLines {
+    my @lines = parseLogFile();   # parseLogFile() already returns a flat list
+    return \@lines;
+}
+
+# Parse the download log to get entries for a specific PID or the most recent
+sub parseLogFile {
+	my ($pid) = @_;  # Optional: if provided, get log for specific PID
+	
+	my $logFile = _logFile();
+	return () unless -f $logFile;  # Return empty list, not empty arrayref
+	
+	my @entries = ();
+	my $current_entry = undef;
+	
+	open(my $fh, '<', $logFile) or return ();
+	
+	while (my $line = <$fh>) {
+		chomp $line;
+		
+		# Check for log entry divider (===)
+		if ($line =~ /^=== \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ===/) {
+			# Start of new download entry
+			$current_entry = {
+				lines => [],
+				pid => undef,
+			};
+			push @entries, $current_entry;
+			
+			# Store the divider line
+			push @{$current_entry->{lines}}, $line;
+		}
+		elsif ($current_entry) {
+			# Store the line regardless of whether we've found a PID yet
+			push @{$current_entry->{lines}}, $line;
+			
+			# Try to extract PID from yt-dlp command line if we haven't found it yet
+			if (!$current_entry->{pid} && $line =~ /pid (\d+)/) {
+				$current_entry->{pid} = $1;
+			}
+		}
+	}
+	
+	close($fh);
+	
+	# If PID provided, return that specific entry's lines as a flat array
+	if ($pid) {
+		foreach my $entry (@entries) {
+			# If entry has matching PID, or if it's the most recent entry and we're searching by PID
+			if ($entry->{pid} && $entry->{pid} == $pid) {
+				return @{$entry->{lines}};
+			}
+		}
+		# If we didn't find the PID, return empty
+		return ();
+	}
+	
+	# Otherwise return the most recent entry's lines as a flat array
+	if (@entries) {
+		return @{$entries[-1]->{lines}};
+	}
+	return ();
 }
 
 1;

@@ -123,6 +123,10 @@ sub initPlugin {
 		require Plugins::YouTube::Settings;
 		Plugins::YouTube::Settings->new;
 		Plugins::YouTube::Settings->init();
+		Slim::Web::Pages->addPageFunction(
+			'plugins/YouTube/downloadlog.html', 
+			\&_webDownloadLog
+    );
 	}
 
 	%recentlyPlayed = map { $_->{url} => $_ } reverse @{$prefs->get('recent')};
@@ -413,19 +417,6 @@ sub playlistHandler {
 	}, $params);
 }
 
-sub playlistDownloadHandler {
-	my ($client, $cb, $args, $pt) = @_;
-	my $id = $pt->{playlistId} or do {
-		$cb->({ items => [{ 
-			type => 'text', 
-			name => cstring($client, 'PLUGIN_YOUTUBE_ERROR_NO_PLAYLIST_ID') 
-		}] });
-		return;
-	};
-	my $r = Plugins::YouTube::Download::startDownload('playlist', "playlistId=$id");
-	$cb->({ items => [{ type => 'text', name => $r->{message} }] });
-}
-
 sub playlistIdHandler {
 	my ($client, $cb, $args) = @_;
 	my $url = delete $args->{search};
@@ -606,6 +597,7 @@ sub _renderList {
 						name => $title,
 					},
 				},
+				more => _makeDownloadAction('video', $id),
 			};
 			
 			push @items, $item;
@@ -626,6 +618,7 @@ sub _renderList {
 						name => $title,
 					},
 				},
+				more => _makeDownloadAction('playlist', $id),
 			};
 			
 			push @items, $item;
@@ -664,6 +657,34 @@ sub _getImage {
 
 	# return either the highest or lowest resolution
 	return ($hires || $prefs->get('highres_icons')) ? $candidates[0] : $candidates[-1];
+}
+
+sub _makeDownloadAction {
+    my ($type, $id) = @_;
+    return {
+        command => ['youtube', 'download'],
+        fixedParams => {
+            url => $type eq 'video' 
+                ? STREAM_BASE_URL . $id 
+                : 'ytplaylist://playlistId=' . $id,
+        },
+    };
+}
+
+sub _webDownloadLog {
+	my ($client, $params) = @_;
+	my $lines = Plugins::YouTube::Download::getLogLines();
+	my $content = join("\n", @$lines) || 'Log is empty.';
+	$content =~ s/&/&amp;/g;
+    $content =~ s/</&lt;/g;
+    $content =~ s/>/&gt;/g;
+
+	return \("
+<!DOCTYPE html><html><head><meta charset='utf-8'><meta http-equiv='Refresh' content='2'>
+<style>body{background-color:#1a1a1a;color:#ccc;height:100vh;overflow:hidden;margin:1rem;}
+pre{max-height:calc(100vh - 2rem);overflow:auto;scrollbar-width:none;display:flex;flex-direction:column-reverse;
+font-family:monospace;scroll-behavior:smooth;white-space:pre-wrap;}</style></head>
+<body><pre><div>" . Slim::Utils::Unicode::utf8encode($content) . "</div></pre></body></html>");
 }
 
 sub trackInfoMenu {
@@ -791,7 +812,6 @@ sub downloadInfoMenu {
 	};
 }
 
-# This handles the actual download when clicked
 sub downloadHandler {
 	my ($client, $cb, $args, $pt) = @_;
 	my $id = $pt->{videoId} or do {
@@ -801,66 +821,54 @@ sub downloadHandler {
 		}] });
 		return;
 	};
-	
-	my $r = Plugins::YouTube::Download::startDownload('video', $id);
-	
-	# Get the target path to show in confirmation
-	my $media_folder = $prefs->get('download_media_folder') || 
-					(preferences('server')->get('audiodir') || [''])->[0] || 
-					cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
-	
-	# Show both the download started message AND folder info
-	$cb->({ 
-		items => [
-			{ type => 'text', name => $r->{message} },
-			{ type => 'text', name => cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder }
-		] 
-	});
-}
 
-# special query to allow weblink to be sent to iPeng
-sub cliInfoQuery {
-	my $request = shift;
-
-	if ($request->isNotQuery([['youtube'], ['info']])) {
-		$request->setStatusBadDispatch();
+	my $index = $args->{index} || 0;
+	if ($index > 0) {
+		$cb->({ items => [] });
 		return;
 	}
 
-	my $id = $request->getParam('id');
+	my $r = Plugins::YouTube::Download::startDownload('video', $id);
+	my @items = ();
 
-	$request->addResultLoop('item_loop', 0, 'text', cstring($request->client, 'PLUGIN_YOUTUBE_PLAYLINK'));
-	$request->addResultLoop('item_loop', 0, 'weblink', sprintf(VIDEO_BASE_URL, $id));
-	$request->addResult('count', 1);
-	$request->addResult('offset', 0);
+	if ($r->{pid}) {
+		push @items, { type => 'text', name => $r->{message} };
 
-	$request->setStatusDone();
-}
+		if ($r->{message} =~ /(https?:\/\/[^\s]+)/) {
+			push @items, { type => 'text', name => $1, style => 'indent' };
+		}
 
-sub cliPlaylistInfo {
-    my $request = shift;
-    
-    my $id = $request->getParam('id');
-    my $name = $request->getParam('name');
-    my $client = $request->client();
-    
-    $log->info("cliPlaylistInfo called - id: $id, name: $name");
-    
-    my $download_url = 'ytplaylist://playlistId=' . $id;
-    
-    # Just show download option
-    $request->addResultLoop('item_loop', 0, 'text', 
-        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
-    $request->addResultLoop('item_loop', 0, 'type', 'text');
-    $request->addResultLoop('item_loop', 0, 'actions', {
-        go => {
-            cmd => ['youtube', 'download', $download_url],
-        },
-    });
-    
-    $request->addResult('count', 1);
-    $request->addResult('offset', 0);
-    $request->setStatusDone();
+		push @items, { 
+			type => 'text', 
+			name => sprintf(cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_PID'), $r->{pid}),
+		};
+
+		my $media_folder = $prefs->get('download_media_folder') || 
+						(preferences('server')->get('audiodir') || [''])->[0] || 
+						cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
+
+		push @items, { 
+			type => 'text', 
+			name => cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder,
+		};
+
+		my $serverUrl = Slim::Utils::Network::serverURL();
+		push @items, {
+			type    => 'text',
+			name    => cstring($client, 'PLUGIN_YOUTUBE_VIEW_LOG'),
+			weblink => $serverUrl . '/plugins/YouTube/downloadlog.html',
+		};
+	} else {
+		push @items, { 
+			type => 'text', 
+			name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_FAILED'),
+		};
+		if ($r->{message}) {
+			push @items, { type => 'text', name => $r->{message} };
+		}
+	}
+
+	$cb->({ items => \@items });
 }
 
 sub cliVideoInfo {
@@ -914,6 +922,31 @@ sub cliVideoInfo {
     }
     
     $request->addResult('count', $count);
+    $request->addResult('offset', 0);
+    $request->setStatusDone();
+}
+
+sub cliPlaylistInfo {
+    my $request = shift;
+
+    my $id   = $request->getParam('id');
+    my $name = $request->getParam('name');
+    my $client = $request->client();
+
+    $log->info("cliPlaylistInfo called - id: $id, name: $name");
+
+    my $download_url = 'ytplaylist://playlistId=' . $id;
+
+    $request->addResultLoop('item_loop', 0, 'text',
+        cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD'));
+    $request->addResultLoop('item_loop', 0, 'type', 'text');
+    $request->addResultLoop('item_loop', 0, 'actions', {
+        go => {
+            cmd => ['youtube', 'download', $download_url],
+        },
+    });
+
+    $request->addResult('count', 1);
     $request->addResult('offset', 0);
     $request->setStatusDone();
 }

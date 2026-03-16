@@ -791,10 +791,10 @@ PLUGIN_YOUTUBE_DOWNLOAD_MEDIAFOLDER_PLACEHOLDER
 	EN	(leave blank to use LMS audio folder)
 
 PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_PLAYLIST
-	CS	Výstupní šablona pro seznam skladeb/kanál
-	DA	Output-skabelon for afspilleliste/kanal
-	DE	Ausgabe-Template für Wiedergabeliste/Kanal
-	EN	Playlist/channel output template
+	CS	Výstupní šablona pro seznam skladeb
+	DA	Output-skabelon for afspilleliste
+	DE	Ausgabe-Template für Wiedergabeliste
+	EN	Playlist output template
 
 PLUGIN_YOUTUBE_DOWNLOAD_OUTPUT_PLAYLIST_PLACEHOLDER
 	CS	(ponechte prázdné pro výchozí hodnotu)
@@ -874,26 +874,32 @@ PLUGIN_YOUTUBE_DOWNLOAD_FAILED
 	DA	Download mislykkedes
 	CS	Stahování se nezdařilo
 
-PLUGIN_YOUTUBE_DOWNLOAD_PLAYLIST
-	EN	Download Playlist: %s
-	DE	Playlist herunterladen: %s
-	DA	Download afspilleliste: %s
-	CS	Stáhnout seznam skladeb: %s
-
 PLUGIN_YOUTUBE_FILES_SAVED_TO
 	EN	Files will be saved to
 	DE	Dateien werden gespeichert unter
 	DA	Filer vil blive gemt i
 	CS	Soubory budou uloženy do
 
-PLUGIN_YOUTUBE_ERROR_NO_PLAYLIST_ID
-	EN	Error: no playlist ID
-	DE	Fehler: keine Playlist-ID
-	DA	Fejl: ingen afspilleliste-ID
-	CS	Chyba: chybí ID seznamu skladeb
-
 PLUGIN_YOUTUBE_ERROR_NO_VIDEO_ID
 	EN	Error: no video ID
 	DE	Fehler: keine Video-ID
 	DA	Fejl: ingen video-ID
 	CS	Chyba: chybí ID videa
+
+PLUGIN_YOUTUBE_VIEW_LOG
+	EN	View Download Log
+	DE	Download-Log anzeigen
+	DA	Vis download-log
+	CS	Zobrazit log stahování
+
+PLUGIN_YOUTUBE_DOWNLOAD_LOG_TITLE
+	EN	YouTube Download Log
+	DE	YouTube Download-Log
+	DA	YouTube Download-log
+	CS	Log stahování YouTube
+
+PLUGIN_YOUTUBE_LOG_EMPTY
+	EN	No log entries found
+	DE	Keine Log-Einträge gefunden
+	DA	Ingen log-poster fundet
+	CS	Nenalezeny žádné záznamy v logu
