@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='Refresh' content='2'>
+  <title>Download Log</title>
+  <style>
+    body {
+      background-color: #010;
+      color: #3a3;
+      height: 100vh;
+      overflow: hidden;
+      margin: 1rem;
+    }
+    pre {
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
+      scrollbar-width: none;
+      display: flex;
+      flex-direction: column-reverse;
+      font-family: monospace;
+      scroll-behavior: smooth;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <pre><div>[% content %]</div></pre>
+</body>
+</html>
