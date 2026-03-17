@@ -33,14 +33,18 @@ jobs:
       - name: Bundle Plugin
         run: |
           # Create a directory named after the plugin folder name)
-          mkdir -p release/YouTube-dl
+          mkdir -p release/YouTube
 
           # Copy your plugin files into the folder
-          cp -r plugin/* release/YouTube-dl/
+          cp -r plugin/* release/YouTube/
+
+          # Inject the custom version so LMS recognizes it as a new/specific build
+          TARGET_XML="release/YouTube/install.xml"
+          sed -i "s|<version>.*</version>|<version>${{ steps.vars.outputs.full_version }}</version>|" $TARGET_XML
 
           # Create the ZIP file
           cd release
-          zip -r ../YouTube-${{ steps.vars.outputs.full_version }}.zip YouTube-dl/
+          zip -r ../YouTube-${{ steps.vars.outputs.full_version }}.zip YouTube/
 
       - name: Generate SHA1 Checksum
         id: checksum
@@ -66,7 +70,7 @@ jobs:
       - name: Show Manual XML Info
         run: |
           echo "--- DATA FOR REPO.XML ---"
-          echo "    <plugin version=\"${{ steps.vars.outputs.full_version }}\" name=\"YouTube-dl\" minTarget=\"7.5\" maxTarget=\"*\">"
+          echo "    <plugin version=\"${{ steps.vars.outputs.full_version }}\" name=\"YouTube\" minTarget=\"7.5\" maxTarget=\"*\">"
           echo "      <sha>${{ steps.checksum.outputs.sha }}</sha>"
-          echo "      <url>: https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/YouTube-${{ steps.vars.outputs.full_version }}.zip</url>"
+          echo "      <url>https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/YouTube-${{ steps.vars.outputs.full_version }}.zip</url>"
 
