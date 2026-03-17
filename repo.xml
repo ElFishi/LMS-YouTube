@@ -4,9 +4,10 @@
     <title lang="EN">ElFishi Custom LMS Plugins</title>
   </details>
   <plugins>
-    <plugin version="0.410.0" name="YouTube-dl" minTarget="7.5" maxTarget="*">
+    <plugin version="0.410.0-dl0" name="YouTube-dl" minTarget="7.5" maxTarget="*">
       <link>https://github.com/ElFishi/LMS-YouTube</link>
       <creator>ElFishi</creator>
+      <desc lang="EN">Philippe's YouTube plugin with download featuret.</desc>
       <sha>xxx</sha>
       <desc lang="EN">Play YouTube video with download feature</desc>
       <url>http://downloads.sourceforge.net/project/lms-plugins-philippe44/YouTube-0.410.0.zip</url>
