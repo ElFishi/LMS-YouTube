@@ -5,6 +5,9 @@ on:
     tags:
       - 'dl*' # Triggers on matching tags
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,7 +49,7 @@ jobs:
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: YouTube-${{ steps.vars.outputs.full_version }}.zip
           name: Release ${{ steps.vars.outputs.full_version }}
@@ -62,7 +65,8 @@ jobs:
 
       - name: Show Manual XML Info
         run: |
-          echo "--- DATA FOR YOUR REPO.XML ---"
-          echo "URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/YouTube-${{ steps.vars.outputs.full_version }}.zip"
-          echo "SHA: ${{ steps.checksum.outputs.sha }}"
-          echo "Version: ${{ steps.vars.outputs.full_version }}"
+          echo "--- DATA FOR REPO.XML ---"
+          echo "    <plugin version=\"${{ steps.vars.outputs.full_version }}\" name=\"YouTube-dl\" minTarget=\"7.5\" maxTarget=\"*\">"
+          echo "      <sha>${{ steps.checksum.outputs.sha }}</sha>"
+          echo "      <url>: https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/YouTube-${{ steps.vars.outputs.full_version }}.zip</url>"
+
