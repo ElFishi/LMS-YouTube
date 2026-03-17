@@ -30,24 +30,28 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Bundle Plugin
+- name: Bundle Plugin (Automated Fork)
         run: |
-          # Create a directory named after the plugin folder name)
+          # Create a distinctly named folder
           mkdir -p release/YouTubeDL
           cp -r plugin/* release/YouTubeDL/
+
+          # Rename physical directories (like HTML/EN/plugins/YouTube -> YouTubeDL)
+          # We use -depth to safely rename from the bottom up
+          find release/YouTubeDL -depth -type d -name "YouTube" -execdir mv {} YouTubeDL \;
 
           # Rewrite the Perl namespace in ALL files safely
           find release/YouTubeDL -type f -exec sed -i 's/Plugins::YouTube/Plugins::YouTubeDL/g' {} +
 
-          # Rewrite web paths (for icons, settings pages, etc.)
-          # find release/YouTubeDL -type f -exec sed -i 's/plugins\/YouTube/plugins\/YouTubeDL/g' {} +
+          # Rewrite web paths (for icons, settings pages, etc.) inside the files
+          find release/YouTubeDL -type f -exec sed -i 's/plugins\/YouTube/plugins\/YouTubeDL/g' {} +
 
           # Inject custom version and distinct display name in install.xml
           TARGET_XML="release/YouTubeDL/install.xml"
           sed -i "s|<version>.*</version>|<version>${{ steps.vars.outputs.full_version }}</version>|" $TARGET_XML
           sed -i "s|<name>.*</name>|<name>YouTubeDL</name>|" $TARGET_XML
 
-          # Create the ZIP file
+          # 6. Zip it up using the new standalone name
           cd release
           zip -r ../YouTubeDL-${{ steps.vars.outputs.full_version }}.zip YouTubeDL/
 
