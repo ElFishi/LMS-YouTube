@@ -40,7 +40,7 @@ jobs:
           find release/YouTubeDL -type f -exec sed -i 's/Plugins::YouTube/Plugins::YouTubeDL/g' {} +
 
           # Rewrite web paths (for icons, settings pages, etc.)
-          find release/YouTubeDL -type f -exec sed -i 's/plugins\/YouTube/plugins\/YouTubeDL/g' {} +
+          # find release/YouTubeDL -type f -exec sed -i 's/plugins\/YouTube/plugins\/YouTubeDL/g' {} +
 
           # Inject custom version and distinct display name in install.xml
           TARGET_XML="release/YouTubeDL/install.xml"
