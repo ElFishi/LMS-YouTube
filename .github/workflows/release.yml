@@ -30,7 +30,7 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
 
-- name: Bundle Plugin (Automated Fork)
+      - name: Bundle Plugin (Automated Fork)
         run: |
           # Create a distinctly named folder
           mkdir -p release/YouTubeDL
