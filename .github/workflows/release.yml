@@ -3,7 +3,7 @@ name: Release Plugin
 on:
   push:
     tags:
-      - 'dl*' # Triggers on matching tags
+      - "*dl" # Triggers on matching tags
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
