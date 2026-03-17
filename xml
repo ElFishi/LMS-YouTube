@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone="yes"?>
+<extensions>
+  <details>
+    <title lang="EN">ElFishi Custom LMS Plugins</title>
+  </details>
+  <plugins>
+    <plugin version="0.410.0" name="YouTube-dl" minTarget="7.5" maxTarget="*">
+      <link>https://github.com/ElFishi/LMS-YouTube</link>
+      <creator>ElFishi</creator>
+      <sha>xxx</sha>
+      <desc lang="EN">Play YouTube video with download feature</desc>
+      <url>http://downloads.sourceforge.net/project/lms-plugins-philippe44/YouTube-0.410.0.zip</url>
+      <title lang="EN">YouTube-dl</title>
+    </plugin>
+  </plugins>
+</extensions>
