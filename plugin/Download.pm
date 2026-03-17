@@ -114,36 +114,36 @@ sub cliDownload {
 	if ($result->{pid}) {
 		# Success - show download started message with PID and folder
 		my @items;
-		
+
 		push @items, { type => 'text', name => cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_STARTED') };
-		
+
 		# Add the URL if present
 		if ($result->{url}) {
 			push @items, { type => 'text', name => $result->{url} };
 		}
-		
-		push @items, { 
-			type => 'text', 
+
+		push @items, {
+			type => 'text',
 			name => sprintf(cstring($client, 'PLUGIN_YOUTUBE_DOWNLOAD_PID'), $result->{pid}),
 		};
-		
+
 		# Add folder info
 		my $media_folder = $prefs->get('download_media_folder') ||
 						(preferences('server')->get('audiodir') || [''])->[0] ||
 						cstring($client, 'PLUGIN_YOUTUBE_DEFAULT_MEDIA_FOLDER');
-		
-		push @items, { 
-			type => 'text', 
+
+		push @items, {
+			type => 'text',
 			name => cstring($client, 'PLUGIN_YOUTUBE_FILES_SAVED_TO') . ' ' . $media_folder,
 		};
-		
+
 		# Add View Log option
 		push @items, {
 			type    => 'link',
 			name    => cstring($client, 'PLUGIN_YOUTUBE_VIEW_LOG'),
 			weblink => Slim::Utils::Network::serverURL() . '/plugins/YouTube/downloadlog.html',
 		};
-		
+
 		# Add items to request
 		my $index = 0;
 		foreach my $item (@items) {
@@ -153,7 +153,7 @@ sub cliDownload {
 			$request->addResultLoop('item_loop', $index, 'weblink', $item->{weblink}) if $item->{weblink};
 			$index++;
 		}
-		
+
 		$request->addResult('count', $index);
 	} else {
 		# Error case
@@ -172,7 +172,7 @@ sub cliDownload {
 			$request->addResultLoop('item_loop', $count, 'type', 'text');
 			$count++;
 		}
-		
+
 		$request->addResult('count', $count);
 	}
 
