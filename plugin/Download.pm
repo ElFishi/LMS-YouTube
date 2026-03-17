@@ -378,7 +378,7 @@ sub startDownload {
 	$log->info("yt-dlp log file will be: $logFile");
 	$log->info('Starting yt-dlp download: ' . join(' ', @cmd));
 
-	my $result = main::ISWINDOWS ? _launchWindows(@cmd) : _launchUnix($logFile, @cmd);
+	my $result = main::ISWINDOWS ? _launchWindows($logFile, @cmd) : _launchUnix($logFile, @cmd);
 
 	if (defined $result->{pid}) {
 		$log->info("Download started (pid $result->{pid}): $ytUrl");
