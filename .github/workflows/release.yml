@@ -24,7 +24,7 @@ jobs:
           XML_VERSION=$(grep -oP '(?<=<version>).*?(?=</version>)' plugin/install.xml)
           TAG_NAME=${GITHUB_REF#refs/tags/}
           # Combine them for a unique filename
-          FULL_VERSION="${XML_VERSION}-${TAG_NAME}"
+          FULL_VERSION="${XML_VERSION}.${TAG_NAME}.dl"
 
           echo "xml_version=$XML_VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
