@@ -3,7 +3,7 @@ name: Release Plugin
 on:
   push:
     tags:
-      - "*dl" # Triggers on matching tags
+      - "dl*" # Triggers on matching tags
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -24,7 +24,7 @@ jobs:
           XML_VERSION=$(grep -oP '(?<=<version>).*?(?=</version>)' plugin/install.xml)
           TAG_NAME=${GITHUB_REF#refs/tags/}
           # Combine them for a unique filename
-          FULL_VERSION="${XML_VERSION}.${TAG_NAME}.dl"
+          FULL_VERSION="${XML_VERSION}-${TAG_NAME}"
 
           echo "xml_version=$XML_VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
@@ -33,29 +33,34 @@ jobs:
       - name: Bundle Plugin
         run: |
           # Create a directory named after the plugin folder name)
-          mkdir -p release/YouTube
+          mkdir -p release/YouTubeDL
+          cp -r plugin/* release/YouTubeDL/
 
-          # Copy your plugin files into the folder
-          cp -r plugin/* release/YouTube/
+          # Rewrite the Perl namespace in ALL files safely
+          find release/YouTubeDL -type f -exec sed -i 's/Plugins::YouTube/Plugins::YouTubeDL/g' {} +
 
-          # Inject the custom version so LMS recognizes it as a new/specific build
-          TARGET_XML="release/YouTube/install.xml"
+          # Rewrite web paths (for icons, settings pages, etc.)
+          find release/YouTubeDL -type f -exec sed -i 's/plugins\/YouTube/plugins\/YouTubeDL/g' {} +
+
+          # Inject custom version and distinct display name in install.xml
+          TARGET_XML="release/YouTubeDL/install.xml"
           sed -i "s|<version>.*</version>|<version>${{ steps.vars.outputs.full_version }}</version>|" $TARGET_XML
+          sed -i "s|<name>.*</name>|<name>YouTubeDL</name>|" $TARGET_XML
 
           # Create the ZIP file
           cd release
-          zip -r ../YouTube-${{ steps.vars.outputs.full_version }}.zip YouTube/
+          zip -r ../YouTubeDL-${{ steps.vars.outputs.full_version }}.zip YouTubeDL/
 
       - name: Generate SHA1 Checksum
         id: checksum
         run: |
-          SHA=$(sha1sum YouTube-${{ steps.vars.outputs.full_version }}.zip | awk '{ print $1 }')
+          SHA=$(sha1sum YouTubeDL-${{ steps.vars.outputs.full_version }}.zip | awk '{ print $1 }')
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: YouTube-${{ steps.vars.outputs.full_version }}.zip
+          files: YouTubeDL-${{ steps.vars.outputs.full_version }}.zip
           name: Release ${{ steps.vars.outputs.full_version }}
           body: |
             ### LMS Plugin Release
@@ -70,7 +75,7 @@ jobs:
       - name: Show Manual XML Info
         run: |
           echo "--- DATA FOR REPO.XML ---"
-          echo "    <plugin version=\"${{ steps.vars.outputs.full_version }}\" name=\"YouTube\" minTarget=\"7.5\" maxTarget=\"*\">"
+          echo "    <plugin version=\"${{ steps.vars.outputs.full_version }}\" name=\"YouTubeDL\" minTarget=\"7.5\" maxTarget=\"*\">"
           echo "      <sha>${{ steps.checksum.outputs.sha }}</sha>"
-          echo "      <url>https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/YouTube-${{ steps.vars.outputs.full_version }}.zip</url>"
+          echo "      <url>https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/YouTubeDL-${{ steps.vars.outputs.full_version }}.zip</url>"
 
