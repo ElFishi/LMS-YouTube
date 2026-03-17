@@ -10,7 +10,7 @@
       <link>https://github.com/ElFishi/LMS-YouTube</link>
       <creator>ElFishi</creator>
       <desc lang="EN">Philippe's YouTube plugin with download feature.</desc>
-      <title lang="EN">YouTube-dl</title>
+      <title lang="EN">YouTubeDL</title>
     </plugin>
   </plugins>
 </extensions>
